@@ -1,5 +1,5 @@
 ---
-title: "Integrating Human KCs"
+title: "Integrating human KCs"
 author: "Larry Chen"
 date: "2023-01-11"
 output: html_document

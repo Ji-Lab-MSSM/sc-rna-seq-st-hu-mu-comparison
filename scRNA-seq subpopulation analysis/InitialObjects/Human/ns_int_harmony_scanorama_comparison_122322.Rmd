@@ -1,0 +1,165 @@
+---
+title: "LISI comparison b/w Seurat, Harmony, Scanorama"
+author: "Larry Chen"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-packages, message = FALSE}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+```
+
+```{r Session-Info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+## Load harmony dataset
+
+```{r}
+ns_int_harmony = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_harmony.Rds")
+Idents(ns_int_harmony) = "integrated_snn_res.0.6"
+```
+
+```{r}
+DimPlot(ns_int_harmony,label = T)
+```
+
+```{r}
+my_levels = 0:21
+Idents(ns_int_harmony) = factor(x = Idents(ns_int_harmony), levels = my_levels)
+```
+
+## import scanorama UMAP coordinates
+
+```{r}
+# Import Scanorama UMAP coordinates and plot Seurat clusters Scanorama UMAP
+scan_umap = read.table("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_scRNAseq_concat_hvg_scanorama_4_datasets_samples_22_clusters_umap.csv",sep=",",row.names = 1,header = T,stringsAsFactors = F)
+
+seurat_res0.6 = ns_int_harmony$integrated_snn_res.0.6
+scan_umap$seurat_res0.6 = seurat_res0.6[match(rownames(scan_umap),names(seurat_res0.6))]
+scan_umap$seurat_res0.6 <- factor(scan_umap$seurat_res0.6, levels = 0:21)
+
+seurat_dataset = ns_int_harmony$dataset
+scan_umap$dataset = seurat_dataset[match(rownames(scan_umap),names(seurat_dataset))]
+
+seurat_sample = ns_int_harmony$sample
+scan_umap$sample <- seurat_sample[match(rownames(scan_umap),names(seurat_sample))]
+
+seurat_cluster = scan_umap$seurat_res0.6
+
+scan_umap$seurat_res0.6 = as.factor(scan_umap$seurat_res0.6)
+
+
+centeroid_scan = aggregate(scan_umap[,c("umap_1","umap_2")], list(scan_umap$seurat_res0.6), FUN=mean)
+
+colnames(centeroid_scan)[1] = "seurat_res0.6"
+```
+
+## Plot scanorama umaps
+
+```{r, eval = FALSE}
+p = ggplot(scan_umap, aes(x=umap_1, y=umap_2,color = seurat_res0.6)) + geom_point(shape = 19, size = 0.1) + theme_classic() +
+  xlab("UMAP 1") + ylab("UMAP 2")
+
+p1 = LabelClusters(p, id = "seurat_res0.6", color = "black")
+ggsave(p1,filename = "ns_int_scanorama_labelby_seurat_res0.6_label.png", width = 6, height = 5)
+
+p = ggplot(scan_umap, aes(x=umap_1, y=umap_2,color = dataset)) + geom_point(shape = 19, size = 0.1) + theme_classic() +
+  xlab("UMAP 1") + ylab("UMAP 2") #+
+ggsave(p,filename = "ns_int_scanorama_labelby_dataset.png", width = 6, height = 5)
+
+p = ggplot(scan_umap, aes(x=umap_1, y=umap_2,color = sample)) + geom_point(shape = 19, size = 0.1) + theme_classic() +
+  xlab("UMAP 1") + ylab("UMAP 2") #+
+ggsave(p,filename = "ns_int_scanorama_labelby_sample.png", width = 7, height = 5)
+```
+
+### color by seurat clusters
+
+```{r, echo = FALSE}
+p = ggplot(scan_umap, aes(x=umap_1, y=umap_2,color = seurat_res0.6)) + geom_point(shape = 19, size = 0.1) + theme_classic() +
+  xlab("UMAP 1") + ylab("UMAP 2") + ggtitle('seurat_res.0.6')
+
+p1 = LabelClusters(p, id = "seurat_res0.6", color = "black")
+p1
+```
+
+### color by dataset
+
+```{r, echo = FALSE}
+p = ggplot(scan_umap, aes(x=umap_1, y=umap_2,color = dataset)) + geom_point(shape = 19, size = 0.1) + theme_classic() +
+  xlab("UMAP 1") + ylab("UMAP 2") #+
+p
+```
+
+### color by sample
+
+```{r, echo = FALSE}
+p = ggplot(scan_umap, aes(x=umap_1, y=umap_2,color = sample)) + geom_point(shape = 19, size = 0.1) + theme_classic() +
+  xlab("UMAP 1") + ylab("UMAP 2") #+
+p
+```
+
+## Print LISI comparison boxplots
+
+### Dataset LISI
+
+```{r, eval = FALSE}
+# Calculate LISI for dataset, sample, and Seurat clusters for Seurat UMAP compared to Scanorama and Harmony UMAP
+# Calculate LISI completed on sherlock due to LISI package installation issues locally
+
+# Print LISI boxplots
+
+# Read data frame in by sample
+plot.data = read.table(file="C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_scan24_lisi_dataset_df.txt",sep="\t",row.names=1,header=T,stringsAsFactors = F)
+
+g <- ggplot(plot.data, aes(class, data, fill = class)) + geom_boxplot(fill = "class", palette = c("#00AFBB", "#E7B800", "#FC4E07")) +
+  labs(x='Method', y='LISI',title='LISI Comparison')
+cols = c("#00AFBB", "#E7B800", "#FC4E07")
+g <- ggplot(plot.data, aes(class, data, fill = class)) + geom_boxplot() +
+  labs(x='Method', y='LISI',title='LISI Comparison') + scale_x_discrete(limits = c("scanorama","harmony","seurat")) +
+  scale_fill_manual(values = cols)
+print(g)
+setwd("~/Dropbox/ns_int/")
+ggsave(plot=g,"ns_int_vs_harmony_vs_scan24_lisi_dataset_boxplot.pdf",width = 5, height=5, dpi=300, useDingbats=F)
+```
+
+```{r, echo = FALSE}
+plot.data = read.table(file="C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_scan24_lisi_dataset_df.txt",sep="\t",row.names=1,header=T,stringsAsFactors = F)
+cols = c("#00AFBB", "#E7B800", "#FC4E07")
+g <- ggplot(plot.data, aes(class, data, fill = class)) + geom_boxplot() +
+  labs(x='Method', y='LISI',title='LISI Comparison - Dataset') + scale_x_discrete(limits = c("scanorama","harmony","seurat")) +
+  scale_fill_manual(values = cols)
+g
+```
+
+### Sample LISI
+
+```{r, eval = FALSE}
+plot.sample = read.table(file="~/Dropbox/ns_int/ns_int_scan24_lisi_sample_df.txt",sep="\t",row.names=1,header=T,stringsAsFactors = F)
+p <- ggplot(plot.sample, aes(class, data, fill = class)) + geom_boxplot() +
+  labs(x='Method', y='LISI',title='LISI Comparison') + scale_x_discrete(limits = c("scanorama","harmony","seurat")) +
+  scale_fill_manual(values = cols)
+print(p)
+ggsave(plot=p,"ns_int_vs_harmony_vs_scan24_lisi_sample_boxplot.pdf",width = 5, height=5, dpi=300, useDingbats=F)
+```
+
+```{r, echo = FALSE}
+plot.sample = read.table(file="C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_scan24_lisi_sample_df.txt",sep="\t",row.names=1,header=T,stringsAsFactors = F)
+cols = c("#00AFBB", "#E7B800", "#FC4E07")
+
+p <- ggplot(plot.sample, aes(class, data, fill = class)) + geom_boxplot() +
+  labs(x='Method', y='LISI', title='LISI Comparison - sample') + scale_x_discrete(limits = c("scanorama","harmony","seurat")) +
+  scale_fill_manual(values = cols)
+p
+```

@@ -1,0 +1,150 @@
+---
+title: "Creating ns_int_keep"
+author: "Larry Chen"
+date: "2023-01-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r load-packages, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+```
+
+```{r Session-Info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+## Load datasets
+
+ns_int_psu_ref contains all confidently identified PSU cells from ns_int. ns_int_fib contains all confidently identified fibroblasts from ns_int.
+
+```{r, eval = FALSE}
+ns_int_psu_ref = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_psu_ref.Rds")
+DefaultAssay(ns_int_psu_ref) = "RNA"
+Idents(ns_int_psu_ref) = "integrated_snn_res.1"
+
+ns_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int.Rds")
+DefaultAssay(ns_int) = "RNA"
+
+ns_int_fib = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_fib.Rds")
+DefaultAssay(ns_int_fib) = "RNA"
+Idents(ns_int_fib) = "integrated_snn_res.0.6"
+```
+
+## assigning confident cell IDs
+
+Will be used later for predicting ST spot identities.
+
+### create vector for new celltypes
+
+```{r, eval = FALSE}
+ST_celltypes = as.character(ns_int$integrated_snn_res.0.6)
+ST_celltypes = paste("res0.6_C",ST_celltypes,sep="")
+```
+
+### assigning cell types to PSU cells within ns_int
+
+```{r, eval = FALSE}
+psu_celltypes = paste("PSUres1_C",0:17,sep="")
+clus = 0:17
+#marking PSU cells with their PSU-specific clusters
+for (i in 1:length(clus))
+{
+  cells = WhichCells(ns_int_psu_ref,idents = clus[i])
+  ST_celltypes[match(cells,colnames(ns_int))] = psu_celltypes[i]
+}
+ns_int$ST_celltypes = ST_celltypes
+```
+
+### assigning cell types to fibroblasts within ns_int
+
+```{r, eval = FALSE}
+#marking fibroblasts with their fibroblast-specific clusters
+fib_celltypes = paste("FIBres0.6_C",0:14,sep="")
+clus = 0:14
+for (i in 1:length(clus))
+{
+  cells = WhichCells(ns_int_fib,idents = clus[i])
+  ST_celltypes[match(cells,colnames(ns_int))] = fib_celltypes[i]
+}
+ns_int$ST_celltypes = ST_celltypes
+
+dput(unique(ns_int$subcell))
+```
+
+### choosing non-fibroblast and PSU cells of interest
+
+```{r, eval = FALSE}
+Idents(ns_int) = "subcell"
+keep_subcell = c("Bas_I", "Bas_II", "Basal_III", "Cyc_I", "Cyc_II", "Cyc_III", 
+                 "Endothelial Cell", "Grn", "LC", 
+                 "Melanocyte", "CD1C", "CLEC9A",  "Mac", "MDSC", "Spn_I", "Spn_IFN", "Spn_II", "Spn_III","Tcell")
+```
+
+```{r, eval = FALSE}
+for (i in 1:length(keep_subcell))
+{
+  cells = WhichCells(ns_int,idents = keep_subcell[i])
+  ST_celltypes[match(cells,colnames(ns_int))] = keep_subcell[i]
+  print(paste(keep_subcell[i],length(cells)))
+}
+ns_int$ST_celltypes = ST_celltypes
+dput(names(table(ns_int$ST_celltypes)))
+```
+
+## subsetting cells of interest from ns_int
+
+### choosing identities to keep
+
+```{r, eval = FALSE}
+keep_celltypes = c("FIBres0.6_C0", "FIBres0.6_C1", "FIBres0.6_C10", "FIBres0.6_C11", 
+                   "FIBres0.6_C12", "FIBres0.6_C2", 
+                   "FIBres0.6_C3", "FIBres0.6_C4", "FIBres0.6_C5", "FIBres0.6_C6", 
+                   "FIBres0.6_C8", "FIBres0.6_C9", "PSUres1_C0", 
+                   "PSUres1_C1", "PSUres1_C10", "PSUres1_C11", "PSUres1_C12", "PSUres1_C13", 
+                   "PSUres1_C14", "PSUres1_C15", "PSUres1_C16", "PSUres1_C17", "PSUres1_C2", 
+                   "PSUres1_C3", "PSUres1_C4", "PSUres1_C5", "PSUres1_C6", "PSUres1_C7", 
+                   "PSUres1_C8", "PSUres1_C9",  
+                   "res0.6_C16",
+                   "res0.6_C21", keep_subcell)
+```
+
+### subsetting
+
+```{r, eval = FALSE}
+# INTEGRATED predictions
+
+DefaultAssay(ns_int) = "integrated"
+
+Idents(ns_int) = "ST_celltypes"
+ns_int_keep = subset(ns_int, idents = keep_celltypes)
+```
+
+## save ns_int_keep
+
+```{r, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int/ns_int_keep")
+saveRDS(ns_int_keep,file="ns_int_keep.Rds")
+```
+
+## save ns_int_keep metadata
+
+```{r, eval = FALSE}
+write.csv(ns_int_keep@meta.data, "C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int/ns_int_keep/ns_int_keep_metadata.csv")
+```

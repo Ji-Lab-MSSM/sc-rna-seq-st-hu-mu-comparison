@@ -1,0 +1,126 @@
+---
+title: "Integrating ns_int using Harmony"
+author: "Larry Chen"
+date: "2023-01-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-packages, message = FALSE}
+library(Seurat)
+library(dplyr)
+```
+
+```{r Session-Info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-load-object, include = FALSE}
+ns_int_harmony = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_harmony.Rds")
+```
+
+## Import ns_int object
+
+```{r}
+ns_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int.Rds")
+```
+
+## Preprocess Data
+
+```{r, eval = FALSE}
+DefaultAssay(ns_int) = "RNA"
+```
+
+```{r, eval = FALSE}
+ns_int = NormalizeData(ns_int)
+ns_int = FindVariableFeatures(ns_int, selection.method = "vst", nfeatures = 2000)
+ns_int = ScaleData(ns_int)
+ns_int = RunPCA(ns_int)
+```
+
+## Run Harmony
+
+```{r eval = FALSE}
+ns_int <- RunHarmony(ns_int, "sample")
+#ns_int <- RunUMAP(ns_int, reduction = "harmony")
+```
+
+```{r, eval = FALSE}
+harmony_embeddings <- Embeddings(ns_int, 'harmony')
+#harmony_embeddings[1:5, 1:5]
+```
+
+## Cluster using harmony
+
+```{r, eval = FALSE}
+ns_int <- ns_int %>% 
+    RunUMAP(reduction = "harmony", dims = 1:30) %>% 
+    FindNeighbors(reduction = "harmony", dims = 1:30) %>% 
+    FindClusters(resolution = 0.5) 
+```
+
+```{r, eval = FALSE}
+ns_int <- FindClusters(ns_int, resolution = 0.6, verbose = FALSE)
+ns_int <- FindClusters(ns_int, resolution = 0.8, verbose = FALSE)
+```
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/harmony")
+```
+
+## Graphing
+
+### label umap by sample, dataset, and subcell
+
+```{r, eval = FALSE}
+p1 <- DimPlot(ns_int, reduction = "umap", group.by = "sample")
+png("ns_int_labelby_sample.png", units = "in", height = 5, width = 8, res=300)
+print(p1)
+dev.off()
+png("ns_int_labelby_dataset.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int, reduction = "umap", group.by = "dataset")
+dev.off()
+png("ns_int_labelby_subcell.png", units = "in", height = 5, width = 10, res=300)
+DimPlot(ns_int, reduction = "umap", group.by = "subcell")
+dev.off()
+```
+
+```{r, eval = FALSE}
+### label umap by seurat cluster
+all_res = c(0.5,0.6,0.8)
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(ns_int) = paste("RNA_snn_res.",res,sep="")
+  png(paste("ns_int_harmony_res_",res,".png",sep=""), units = "in", height = 5, width = 7, res=300)
+  p=DimPlot(ns_int, reduction="umap", label=T, pt.size = 0.1)
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_harmony, group.by = 'dataset')
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_harmony, group.by = 'sample')
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_harmony, group.by = 'integrated_snn_res.0.6', label = T)
+```
+
+## Save object
+
+```{r, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj")
+saveRDS(ns_int,file="ns_int_harmony.Rds")
+```

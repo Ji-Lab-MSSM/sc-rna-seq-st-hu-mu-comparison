@@ -29,7 +29,7 @@ sessioninfo::session_info()%>%
     open    = TRUE
   )
 ```
-##Reading in cheng_ife_object
+## Reading in cheng_ife_object
 ```{r read-cheng_ife}
 cheng_ife = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife.Rds")
 ```
@@ -94,7 +94,7 @@ dev.off()
 
 ### Clustering
 
-```{r clustering-cheng_ife_cyc}
+```{r clustering-cheng_ife_cyc, eval = FALSE}
 all_res = c(0.1,0.2,0.4,0.6,0.8,1,1.2,1.5)
 cheng_ife_cyc_int <- FindNeighbors(cheng_ife_cyc_int, dims = 1:30, verbose = T)
 
@@ -115,7 +115,7 @@ FeaturePlot(cheng_ife_cyc_int,features = c("COL17A1","KRT1","S.Score","G2M.Score
 
 #### UMAPs at all clustering res
 
-```{r umap-cheng_ife_cyc_int}
+```{r umap-cheng_ife_cyc_int, eval = FALSE}
 setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
 for (i in 1:length(all_res))
 {
@@ -162,7 +162,7 @@ for (i in 1:length(genes_match))
 
 #### UMAP by tissue
 
-```{r tissue-umap-cheng_ife_cyc_int}
+```{r tissue-umap-cheng_ife_cyc_int, eval = FALSE}
 setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
 png("cheng_ife_cyc_int_groupby_tissue.png", units = "in", height = 5, width = 6, res=300)
 DimPlot(cheng_ife_cyc_int, reduction="umap", label=T, group.by = "tissue", pt.size = 0.1)
@@ -171,7 +171,7 @@ dev.off()
 
 #### UMAP by phase
 
-```{r phase-umap-cheng_ife_cyc_int}
+```{r phase-umap-cheng_ife_cyc_int, eval = FALSE}
 setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
 
 Idents(cheng_ife_cyc_int) = "Phase"
@@ -184,7 +184,7 @@ dev.off()
 
 #### UMAP by cell cycle score
 
-```{r cc-umap-cheng_ife_cyc_int}
+```{r cc-umap-cheng_ife_cyc_int, eval = FALSE}
 setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
 
 cc_scores = c("S.Score","G2M.Score")
@@ -224,14 +224,14 @@ DefaultAssay(cheng_ife_cyc_int) = "integrated"
 ```
 ### SAVING OBJECT
 
-```{r save-cheng_ife_cyc_int}
+```{r save-cheng_ife_cyc_int, eval = FALSE}
 setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
 saveRDS(cheng_ife_cyc_int, file="cheng_ife_cyc_int.Rds")
 ```
 
 ### SAVE METADATA
 
-```{r save-metadata-cheng_ife_cyc_int}
+```{r save-metadata-cheng_ife_cyc_int, eval = FALSE}
 setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
 cheng_ife_cyc_int_metadata = as.matrix(cheng_ife_cyc_int@meta.data)
 write.table(cheng_ife_cyc_int_metadata,file="cheng_ife_cyc_int_metadata.txt",sep="\t",col.names=T,row.names=T)

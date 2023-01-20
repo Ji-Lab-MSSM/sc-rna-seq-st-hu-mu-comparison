@@ -1,5 +1,5 @@
 ---
-title: "Creating mu_int_ife"
+title: "Isolating mouse IFE cells"
 author: "Larry Chen"
 date: "2023-01-11"
 output: html_document

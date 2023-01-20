@@ -1,0 +1,122 @@
+---
+title: "Running LISI on ns_int integrated using Seurat, Harmony and Scanorama"
+author: "Larry Chen"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-packages, message = FALSE}
+library(reticulate)
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+```
+
+## Read in objects
+
+```{r}
+ns_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_harmony.Rds")
+DefaultAssay(ns_int) = "RNA"
+ns_int_harm = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int.Rds")
+DefaultAssay(ns_int_harm) = "RNA"
+```
+
+## QC
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/plots")
+genes_match = c("nCount_RNA","nFeature_RNA")
+for (i in 1:length(genes_match))
+{
+  pdf(paste("ns_int_",genes_match[i],"_dataset_vln_plot.pdf",sep=""), height = 5, width = 8)
+  p=VlnPlot(ns_int,features = genes_match[i], pt.size = 0, group.by = "dataset")
+  print(p)
+  dev.off()
+}
+print(median(ns_int$nCount_RNA[which(ns_int$dataset=="AJ")]))
+print(median(ns_int$nCount_RNA[which(ns_int$dataset=="JC")]))
+print(median(ns_int$nCount_RNA[which(ns_int$dataset=="RT")]))
+print(median(ns_int$nCount_RNA[which(ns_int$dataset=="TT")]))
+print(median(ns_int$nFeature_RNA[which(ns_int$dataset=="AJ")]))
+print(median(ns_int$nFeature_RNA[which(ns_int$dataset=="JC")]))
+print(median(ns_int$nFeature_RNA[which(ns_int$dataset=="RT")]))
+print(median(ns_int$nFeature_RNA[which(ns_int$dataset=="TT")]))
+```
+
+```{r, echo = FALSE}
+VlnPlot(ns_int,features = "nCount_RNA", pt.size = 0, group.by = "dataset")
+```
+
+```{r, echo = FALSE}
+VlnPlot(ns_int,features = "nFeature_RNA", pt.size = 0, group.by = "dataset")
+```
+
+## Calculate LISI
+
+### Seurat
+
+```{r, eval = FALSE}
+########
+# Calculate LISI from UMAP embedding and batch label
+library(lisi)
+
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/lisi")
+umap_coor = as.matrix(Embeddings(ns_int[["umap"]]))
+meta_data = ns_int@meta.data[,c("sample","dataset")]
+res <- compute_lisi(umap_coor, meta_data, c('sample', 'dataset'))
+head(res)
+write.table(res,"ns_int_seurat_lisi_umap.txt",sep="\t",row.names=T,col.names=T)
+```
+
+### Harmony
+
+```{r, eval = FALSE}
+umap_coor_harm = as.matrix(Embeddings(ns_int_harm[["umap"]]))
+meta_data_harm = ns_int_harm@meta.data[,c("sample","dataset")]
+res_harm <- compute_lisi(umap_coor_harm, meta_data_harm, c('sample', 'dataset'))
+head(res_harm)
+write.table(res_harm,"ns_int_harmony_lisi_umap.txt",sep="\t",row.names=T,col.names=T)
+```
+
+### Scanorama
+
+```{r, eval = FALSE}
+## Scanorama embeddings
+umap_scan = read.table("/scratch/groups/khavari/users/andrewji/ns_int/lisi/ns_scRNAseq_concat_hvg_scanorama_4_datasets_samples_22_clusters_umap.csv",sep=",",row.names=1,header=T,stringsAsFactors=F)
+meta_data_scan = meta_data[match(rownames(umap_scan),rownames(meta_data)),]
+res_scan <- compute_lisi(umap_scan, meta_data_scan, c('sample', 'dataset'))
+head(res_scan)
+write.table(res_scan,"ns_int_scanorama24_lisi_umap.txt",sep="\t",row.names=T,col.names=T)
+```
+
+## Saving results
+
+```{r, eval = FALSE}
+res_scan_order = res_scan[match(rownames(res_harm),rownames(res_scan)),]
+```
+
+```{r, eval = FALSE}
+plot.data <- data.frame(class=rep(c('seurat', 'harmony','scanorama'), 
+                                  each=nrow(res)), 
+                        data =  c(res$dataset,
+                                  res_harm$dataset,
+                                  res_scan_order$dataset))
+```
+
+```{r, eval = FALSE}
+write.table(plot.data,file="ns_int_scan24_lisi_dataset_df.txt",sep="\t",row.names=T,col.names=T)
+plot.data <- data.frame(class=rep(c('seurat', 'harmony','scanorama'), 
+                                  each=nrow(res)), 
+                        data =  c(res$sample,
+                                  res_harm$sample,
+                                  res_scan_order$sample))
+```
+
+```{r, eval = FALSE}
+write.table(plot.data,file="ns_int_scan24_lisi_sample_df.txt",sep="\t",row.names=T,col.names=T)
+```

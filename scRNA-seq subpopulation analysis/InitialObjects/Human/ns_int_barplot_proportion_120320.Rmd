@@ -1,0 +1,162 @@
+---
+title: "ns_int proportion barplots"
+author: "Larry Chen"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import-libraries, message = FALSE}
+library(Seurat)
+library(dplyr)
+library(gplots)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+## Import data
+
+```{r}
+####
+ns_int = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int.Rds')
+ns_int_metadata = ns_int@meta.data
+```
+
+### Order samples by dataset and patient
+
+```{r}
+# Order samples by dataset and patient
+dput(unique(ns_int_metadata$sample))
+sample_names = unique(ns_int_metadata$sample)
+alpha_sample = sample_names[order(sample_names,decreasing=F)]
+order_sample = c("P1", "P2", "P3", "P4", "P5","P6", "P7", "P8", "P9","P10", 
+  "SC1control", "SC4control", "SC18control", "SC32control", "SC33control", 
+  "SC34control", "s11", "scalp26", "scalp32", "abd4", "br41epi", 
+  "br53epi", "rt1", "rt2")
+```
+
+## Proportion plots for patients
+
+```{r}
+# Proportion plots for patients
+ns_int_patient = table(ns_int_metadata[,"sample"])
+ns_int_patient_order = ns_int_patient[order_sample]
+```
+
+### Cell number
+
+```{r, eval = FALSE}
+pdf("ns_int_patient_cell_number_ordered.pdf",height=4,width=7)
+barplot(ns_int_patient_order, col = "black",las=2)
+dev.off()
+```
+
+```{r, echo = FALSE}
+barplot(ns_int_patient_order, col = "black",las=2)
+```
+
+### Cluster proportions per patient
+
+```{r}
+require(scales)
+col22 = hue_pal()(22)
+subpop_prop = prop.table(table(ns_int_metadata[,"integrated_snn_res.0.6"],ns_int_metadata[,"sample"]),margin = 2)
+#subpop_prop_order = subpop_prop[rev(c(4,1,5,2,9,11,3,6,7,8,15,10,14,12,13)),order(ns_int_patient,decreasing = T)]
+#hf_order = hf_types[rev(c(4,1,5,2,9,11,3,6,7,8,15,10,14,12,13))]
+#col_order = col15[rev(c(4,1,5,2,9,11,3,6,7,8,15,10,14,12,13))]
+```
+
+```{r, eval = FALSE}
+pdf("ns_int_subpop_prop_legend.pdf",height=10,width=14)
+barplot(subpop_prop, col = col22, las=2)
+legend("topright",as.character(0:21),fill = col22)
+dev.off()
+```
+
+```{r, echo = FALSE}
+barplot(subpop_prop, col = col22, las=2)
+```
+
+```{r, eval = FALSE}
+subpop_prop_order = subpop_prop[,order_sample]
+pdf("ns_int_subpop_prop_legend_ordered.pdf",height=10,width=14)
+barplot(subpop_prop_order, col = col22, las=2)
+legend("topright",as.character(0:21),fill = col22)
+dev.off()
+```
+
+```{r, echo = FALSE}
+subpop_prop_order = subpop_prop[,order_sample]
+par(mar=c(5, 4, 4, 8), xpd=TRUE)
+barplot(subpop_prop_order, col = col22, las=2)
+legend("topright", inset=c(-0.1, 0), as.character(0:21),fill = col22, cex = 0.75)
+```
+
+```{r, eval = FALSE}
+pdf("ns_int_subpop_prop_legend_ordered_reverse_clus.pdf",height=10,width=14)
+barplot(subpop_prop_order[22:1,], col = rev(col22), las=2)
+legend("topright",as.character(0:21),fill = col22)
+dev.off()
+```
+
+```{r, echo = FALSE}
+par(mar=c(5, 4, 4, 8), xpd=TRUE)
+barplot(subpop_prop_order[22:1,], col = rev(col22), las=2)
+legend("topright", inset=c(-0.1, 0), as.character(0:21),fill = col22, cex = 0.75)
+```
+
+```{r}
+cluster_table = table(ns_int_metadata[,"integrated_snn_res.0.6"],ns_int_metadata[,"sample"])
+apply(cluster_table,2,sum)
+```
+
+```{r}
+ns_int_res0.6_table = table(ns_int_metadata$integrated_snn_res.0.6,ns_int_metadata$sample)
+ns_int_clus_rep = apply(ns_int_res0.6_table,2,function(x) {length(which(x>0))/length(x)})
+ns_int_clus_rep_round = round(ns_int_clus_rep*100,2)
+ns_int_clus_print_prop = apply(ns_int_res0.6_table,2,function(x) {paste(length(which(x>0)),"/",length(x),sep="")})
+ns_int_clus_combined = paste(ns_int_clus_print_prop," ",ns_int_clus_rep_round,"%",sep="")
+names(ns_int_clus_combined) = names(ns_int_clus_print_prop)
+ns_int_clus_combined_order = ns_int_clus_combined[order_sample]
+ns_int_patient_order_dummy = ns_int_patient_order
+names(ns_int_patient_order_dummy) = ns_int_clus_combined_order
+```
+
+## Bar plot with clusters present in each sample
+
+```{r, eval = FALSE}
+pdf("ns_int_patient_cell_number_ordered_clus_rep.pdf",height=4,width=7)
+barplot(ns_int_patient_order_dummy, col = "black",las=2)
+dev.off()
+```
+
+```{r, echo = FALSE}
+par(mar=c(7, 4, 4, 5), xpd=TRUE)
+barplot(ns_int_patient_order_dummy, col = "black",las=2)
+```
+
+```{r, eval = FALSE}
+col24 = hue_pal()(24)
+col24_order = col24[match(order_sample,alpha_sample)]
+pdf("ns_int_patient_cell_number_ordered_colorbysample.pdf",height=10,width=14)
+barplot(ns_int_patient_order_dummy, col = "black",las=2)
+legend("topright",order_sample,fill = col24_order)
+dev.off()
+```
+
+```{r, echo = FALSE}
+col24 = hue_pal()(24)
+col24_order = col24[match(order_sample,alpha_sample)]
+par(mar=c(7, 4, 2, 8), xpd=TRUE)
+barplot(ns_int_patient_order_dummy, col = col24_order,las=2)
+legend("topright",inset=c(-0.2, 0), order_sample, fill = col24_order, cex = 0.75)
+```

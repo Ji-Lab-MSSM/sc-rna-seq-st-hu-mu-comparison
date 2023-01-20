@@ -1,0 +1,274 @@
+---
+title: "Integrating ns_int"
+author: "Larry Chen"
+date: "2023-01-05"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r load-packages, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+```
+```{r Session-Info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+```{r, include = FALSE}
+ns_int = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int.Rds')
+```
+## load datasets
+
+```{r load-individual-datasets, eval = FALSE}
+ns_tabib = readRDS("/oak/stanford/groups/khavari/users/andrewji/NS_datasets/analysis/tabib_data/ns_tabib.Rds")
+ns_cheng = readRDS("/oak/stanford/groups/khavari/users/andrewji/NS_datasets/analysis/cheng_data/ns_body.Rds")
+ns_taka = readRDS("/oak/stanford/groups/khavari/users/andrewji/seurat_obj/rt_all.Rds")
+norm_update = readRDS("/oak/stanford/groups/khavari/users/andrewji/normal_skin/norm/norm_update_no_rp.Rds")
+```
+
+## Preprocess datasets
+
+```{r, eval = FALSE}
+norm_update$sample = norm_update$patient
+ns_taka$sample = ns_taka$orig.ident
+ns_tabib$sample = ns_tabib$orig.ident
+norm_update[["percent.mt"]] <- PercentageFeatureSet(norm_update, pattern = "^MT-")
+ns_taka = subset(ns_taka, nFeature_RNA>200)
+```
+
+### assign dataset identities
+
+```{r, eval = FALSE}
+ns_taka$dataset = rep("RT",ncol(ns_taka))
+norm_update$dataset = rep("AJ",ncol(norm_update))
+ns_tabib$dataset = rep("TT",ncol(ns_tabib))
+ns_cheng$dataset = rep("JC",ncol(ns_cheng))
+```
+### merge datasets
+```{r, eval = FALSE}
+all_obj = list(norm_update,ns_tabib,ns_cheng,ns_taka)
+allnames = c("AJ","TT","JC","RT")
+
+ns_all <- merge(norm_update, y = unlist(all_obj[2:4]), add.cell.ids = allnames, project = "ns_all")
+```
+### normalize datasets
+```{r, eval = FALSE}
+ns.list <- SplitObject(ns_all, split.by = "sample")
+
+for (i in 1:length(ns.list)) {
+    ns.list[[i]] <- NormalizeData(ns.list[[i]], verbose = FALSE)
+    ns.list[[i]] <- FindVariableFeatures(ns.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+}
+```
+## Integrate datasets
+```{r, eval = FALSE}
+reference.list <- ns.list
+ns.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+
+ns_int <- IntegrateData(anchorset = ns.anchors, dims = 1:30)
+DefaultAssay(ns_int) <- "integrated"
+```
+### scale integrated dataset
+```{r, eval = FALSE}
+
+ns_int <- ScaleData(ns_int, verbose = FALSE)
+ns_int <- RunPCA(ns_int, npcs = 30, verbose = FALSE)
+ns_int <- RunUMAP(ns_int, reduction = "pca", dims = 1:30)
+```
+###clustering
+```{r, eval = FALSE}
+
+ns_int <- FindNeighbors(ns_int, dims = 1:30, verbose = T)
+ns_int <- FindClusters(ns_int, resolution = 0.1, verbose = FALSE)
+#ns_int <- FindClusters(ns_int, resolution = 0.15, verbose = FALSE)
+ns_int <- FindClusters(ns_int, resolution = 0.2, verbose = FALSE)
+#ns_int <- FindClusters(ns_int, resolution = 0.25, verbose = FALSE)
+#ns_int <- FindClusters(ns_int, resolution = 0.3, verbose = FALSE)
+ns_int <- FindClusters(ns_int, resolution = 0.4, verbose = FALSE)
+ns_int <- FindClusters(ns_int, resolution = 0.6, verbose = FALSE)
+ns_int <- FindClusters(ns_int, resolution = 0.8, verbose = FALSE)
+```
+###save file
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int")
+saveRDS(ns_int, file="ns_int.Rds") 
+```
+##Graphing
+###umaps
+```{r, eval = FALSE}
+p1 <- DimPlot(ns_int, reduction = "umap", group.by = "sample")
+
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/plots")
+```
+```{r, eval = FALSE}
+png("ns_int_labelby_sample.png", units = "in", height = 5, width = 8, res=300)
+print(p1)
+dev.off()
+png("ns_int_labelby_dataset.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int, reduction = "umap", group.by = "dataset")
+dev.off()
+png("ns_int_labelby_subcell.png", units = "in", height = 5, width = 10, res=300)
+DimPlot(ns_int, reduction = "umap", group.by = "subcell")
+dev.off()
+png("ns_int_labelby_subcell.png", units = "in", height = 5, width = 10, res=300)
+DimPlot(ns_int, reduction = "umap", group.by = "subcell")
+dev.off()
+```
+#### split by samples
+```{r, echo = FALSE}
+DimPlot(ns_int, reduction = "umap", group.by = "sample")
+```
+#### split by datasets
+```{r, echo = FALSE}
+DimPlot(ns_int, reduction = "umap", group.by = "dataset")
+```
+#### highlighting specific datasets
+#####defining subsets
+```{r}
+Idents(ns_int) = 'dataset'
+AJ_cells = WhichCells(ns_int, idents = c('AJ'))
+JC_cells = WhichCells(ns_int, idents = c('JC'))
+RT_cells = WhichCells(ns_int, idents = c('RT'))
+TT_cells = WhichCells(ns_int, idents = c('TT'))
+```
+```{r}
+DimPlot(ns_int, reduction = "umap", cols = 'lightgray', cells.highlight = AJ_cells)
+```
+```{r}
+DimPlot(ns_int, reduction = "umap", cols = 'lightgray', cells.highlight = JC_cells)
+```
+```{r}
+DimPlot(ns_int, reduction = "umap", cols = 'lightgray', cells.highlight = RT_cells)
+```
+```{r}
+DimPlot(ns_int, reduction = "umap", cols = 'lightgray', cells.highlight = TT_cells)
+```
+### graphing subcell types of interest
+```{r, eval = FALSE}
+subcell_order = c("Bas_I", "Bas_II", "Basal_III", "Cyc_I", "Cyc_II", "Cyc_III", 
+"Ecc_II", "Endothelial Cell", "Fibroblast", "Grn", "HF", "IB", 
+"Inf_I", "Inf_II", "Inf_III", "Inf_IV", "Keratinocyte", "LC", 
+"Melanocyte", "Mtx_I", "Mtx_II", "Multiplet", "N_Cyc", "OB", 
+"PS_Cyc", "SG_I", "SG_II", "Spn_I", "Spn_IFN", "Spn_II", "Spn_III", 
+"ASDC", "CD1C", "CLEC9A", "Ecc_I", "Mac", "MDSC", "PDC", "Tcell", 
+"B Cell", "IRS", "NK", "SB", "Spn_RDX", "Multi", "N_Basal")
+Idents(ns_int) = "subcell"
+```
+
+```{r, eval = FALSE}
+cells_highlight = WhichCells(ns_int, idents = subcell_order)
+png("ns_int_labelby_subcell_noNA.png", units = "in", height = 5, width = 10, res=300)
+DimPlot(ns_int, reduction = "umap",cells = cells_highlight)
+dev.off()
+png("ns_int_labelby_subcell_noNA_label.png", units = "in", height = 5, width = 10, res=300)
+DimPlot(ns_int, reduction = "umap",cells = cells_highlight, label=T)
+dev.off()
+
+png("ns_int_labelby_percentmt.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int, features = "percent.mt")
+dev.off()
+png("ns_int_labelby_nUMI.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int, features = "nCount_RNA")
+dev.off()
+png("ns_int_labelby_nFeature.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int, features = "nFeature_RNA")
+dev.off()
+```
+
+
+###umaps at different resolutions
+```{r, eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8)
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(ns_int) = paste("integrated_snn_res.",res,sep="")
+  png(paste("ns_int_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(ns_int, reduction="umap", label=T, do.return = T, pt.size = 0.1)
+  print(p)
+  dev.off()
+}
+```
+
+```{r}
+Idents(ns_int) = 'integrated_snn_res.0.6'
+DimPlot(ns_int, reduction = 'umap', label = T)
+```
+### gene feature plots
+```{r, eval = FALSE}
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD163","CD207",
+	"CD3E","MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1",
+	"KRT23","KRT25","KRT6A","KRT16","KRT17","PPARG","DIO2","COMP","FGF7","COL17A1","TP63","PTN","SAT1","SOX4","KLF5","TNC",
+	"PTHLH","MT1X","MT1G","MT1H","MT1E","SFRP1","DMKN","ZNF750","IVL","SOSTDC1","FGF18","IL37","IL1F10","IL36RN","IL1RN",
+	"MDK","LGALS1","CD151","ITGB1","MKI67","LUM","COL6A1","SOX2","DHRS9","LCE1E","PIP")
+```
+
+```{r, eval = FALSE}
+#genes = "MT-CYB"
+genes_match = genes[genes %in% rownames(ns_int)]
+
+for (i in 1:length(genes_match))
+{
+  png(paste("ns_int_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = ns_int, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+```{r, eval = FALSE}
+DefaultAssay(ns_int) = "RNA"
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/plots")
+
+for (i in 1:length(genes_match))
+{
+  png(paste("ns_int_",genes_match[i],"_noaxes_nolegend_pt0.25_RNA.png",sep=""), units = "in", height = 5, width = 5, res=300)
+  p=FeaturePlot(object = ns_int, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoAxes()
+  print(p)
+  dev.off()
+  png(paste("ns_int_",genes_match[i],"_noaxes_nolegend_pt0.25_RNA_nolegend.png",sep=""), units = "in", height = 5, width = 5, res=300)
+  p=FeaturePlot(object = ns_int, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoAxes() + NoLegend()
+  print(p)
+  dev.off()
+}
+```
+## Save object
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/")
+saveRDS(ns_int, file="ns_int.Rds") 
+```
+## Find cluster markers
+```{r, eval = FALSE}
+Idents(ns_int) = "integrated_snn_res.0.4"
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/")
+markers <- FindAllMarkers(ns_int, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+write.table(markers.filt, file = "ns_int_seurat_markers_res0.4.csv",sep = ",",row.names = T, col.names=T)
+```
+## remove old objects
+```{r, eval = FALSE}
+rm(ns_tabib)
+rm(ns_cheng)
+rm(ns_taka)
+rm(all_obj)
+rm(ns.list)
+```
+
