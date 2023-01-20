@@ -1,0 +1,171 @@
+---
+title: "Processing pso_cheng_ife"
+author: "Larry Chen"
+date: "2023-01-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package. 
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r load-packages, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+#library(Seurat)
+#library(SeuratObject)
+library(patchwork)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(tibble)
+library(sessioninfo)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+# 2. ISOLATING IFE CELLS FROM PSORIATIC SAMPLES
+
+## Pso_cheng preprocessing
+
+```{r load-pso_cheng_no_int}
+# Merge IFE psoriasis and IFE healthy
+# Import and Preprocess data
+pso_cheng_no_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/pso_cheng/pso_cheng.Rds")
+DefaultAssay(pso_cheng_no_int) = "RNA"
+```
+
+```{r normalize-pso_cheng_no_int}
+hu.list <- SplitObject(pso_cheng_no_int, split.by = "sample")
+
+
+# Normalize all objects
+for (i in 1:length(hu.list)) {
+    hu.list[[i]] <- NormalizeData(hu.list[[i]], verbose = FALSE)
+    hu.list[[i]] <- FindVariableFeatures(hu.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+    print(i)
+}
+```
+
+```{r integrate-pso_cheng_no_int, message = FALSE}
+reference.list <- hu.list
+hu.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+
+pso_cheng <- IntegrateData(anchorset = hu.anchors, dims = 1:30)
+```
+
+### Seurat Data Processing
+
+```{r scale-pso_cheng}
+pso_cheng <- ScaleData(pso_cheng, verbose = FALSE)
+pso_cheng <- RunPCA(pso_cheng, npcs = 30, verbose = FALSE)
+pso_cheng <- RunUMAP(pso_cheng, reduction = "pca", dims = 1:30)
+```
+
+### Clustering
+
+Clusters are generated at resolutions 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, and 1.2 to help with isolating cells.
+
+```{r cluster-pso_cheng}
+DefaultAssay(pso_cheng) = "integrated"
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+pso_cheng <- FindNeighbors(pso_cheng, dims = 1:30, verbose = T)
+
+for (i in all_res){
+  pso_cheng <- FindClusters(pso_cheng, resolution = i, verbose = FALSE)
+}
+```
+
+### Save pso_cheng
+
+```{r save-pso_cheng, eval = FALSE}
+saveRDS(pso_cheng, "C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/pso_cheng/pso_cheng.Rds")
+```
+
+## Generating UMAPs, Feature Plots, and Marker Lists
+
+These tools were used to identify clusters. UMAPs, Feature Plots, and Marker Lists are generated for every cluster resolution.
+
+### UMAPS
+
+```{r umap-pso_cheng}
+#Generating and Saving UMAPs
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/pso_cheng')
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(pso_cheng) = paste("integrated_snn_res.",res,sep="")
+  png(paste("pso_cheng_UMAP",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(pso_cheng, reduction="umap", label=T, pt.size = 1)
+  print(p)
+  dev.off()
+}
+```
+
+### Feature Plots
+
+```{r feature-plot-pso_cheng, eval = FALSE}
+#Generating and Saving Feature Plots
+DefaultAssay(pso_cheng) = "RNA"
+genes = list(c("KRT10",'COL17A1'),c("LOR",'FLG','IVL','KLK7'),c("MKI67",'PCNA','TOP2A'), c("ITGA6", "ITGB4", "ITGB1", "KRT14", "KRT5",'COL17A1'), c("KRT79","EPCAM", "SOX9"))
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/pso_cheng')
+for (i in 1:length(genes))
+{
+  png(paste("pso_cheng_",paste(genes[[i]], collapse = '.'),"_noaxes_nolegend.png", sep=""), units = "in", height = 6, width = 10, res=300)
+  p= FeaturePlot(object = pso_cheng, features = genes[[i]], cols = c("lightgrey", "blue"), pt.size = 1)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+### Marker Lists
+
+```{r markers-pso_cheng, message = FALSE, eval = FALSE}
+DefaultAssay(pso_cheng) = "RNA"
+for (i in all_res){
+  Idents(pso_cheng) = paste("integrated_snn_res.", i, sep = '')
+  pso_cheng.markers = FindAllMarkers(pso_cheng, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  write.csv(pso_cheng.markers, paste0("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/pso_cheng/pso_cheng.markers_",i,".csv"))
+}
+```
+
+## Subsetting IFE cells
+
+Using the generated feature maps, In pso_cheng, clusters 0-5, and 8 \@ resolution 0.4 were identified as interfollicular epidermal (IFE) cells.
+
+```{r subset-dimplot-pso_cheng}
+Idents(pso_cheng) = "integrated_snn_res.0.4"
+DimPlot(pso_cheng, label = TRUE)
+```
+
+```{r subset-feature-pso_cheng}
+DefaultAssay(pso_cheng) = "RNA"
+FeaturePlot(pso_cheng, features = c('LHX2','KRT17','AWAT2','DCD','COL1A1','MLANA','VWF','CD3E','CD207','CD163'))
+```
+
+```{r subset-pso_cheng}
+DefaultAssay(pso_cheng) = "integrated"
+Idents(pso_cheng) = "integrated_snn_res.0.4"
+pso_cheng_ife = subset(pso_cheng, idents = c(0:5,8))
+```
+
+### Saving object
+
+```{r save-pso_cheng_ife, eval = FALSE}
+saveRDS(pso_cheng_ife, "C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/pso_cheng/pso_cheng_ife/pso_cheng_ife.Rds")
+```

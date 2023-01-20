@@ -1,0 +1,212 @@
+---
+title: "Isolating mouse PSU cells"
+author: "Larry Chen"
+date: "2023-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-load, include = FALSE}
+mu_int_psu = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/psu/mu_int_psu.Rds")
+```
+
+## Load Object
+
+```{r, eval = FALSE}
+mu_int = readRDS("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_all_int.Rds") 
+```
+
+## Subset PSU cells
+
+```{r, eval = FALSE}
+Idents(mu_int) = "integrated_snn_res.0.1"
+mu_int_psu = subset(mu_int, idents = c(1,4,5,10))
+DefaultAssay(mu_int_psu) = "RNA"
+```
+
+## Preprocess
+
+```{r, eval = FALSE}
+mu.list <- SplitObject(mu_int_psu, split.by = "orig.ident")
+
+for (i in 1:length(mu.list)) {
+    mu.list[[i]] <- NormalizeData(mu.list[[i]], verbose = FALSE)
+    mu.list[[i]] <- FindVariableFeatures(mu.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+    print(i)
+}
+```
+
+## Integrate
+
+```{r, eval = FALSE}
+reference.list <- mu.list
+mu.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+
+mu_int_psu <- IntegrateData(anchorset = mu.anchors, dims = 1:30)
+```
+
+## Scale/PCA/UMAP
+
+```{r, eval = FALSE}
+DefaultAssay(mu_int_psu) <- "integrated"
+mu_int_psu <- ScaleData(mu_int_psu, verbose = FALSE)
+mu_int_psu <- RunPCA(mu_int_psu, npcs = 30, verbose = FALSE)
+mu_int_psu <- RunUMAP(mu_int_psu, reduction = "pca", dims = 1:30)
+```
+
+## UMAP by sample
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/psu/plots")
+png("mu_int_psu_labelbysample.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_psu, reduction = "umap", group.by = "orig.ident")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DefaultAssay(mu_int_psu) <- "integrated"
+DimPlot(mu_int_psu, reduction = "umap", group.by = "orig.ident")
+```
+
+## Clustering
+
+```{r, eval = FALSE}
+mu_int_psu <- FindNeighbors(mu_int_psu, dims = 1:30, verbose = T)
+mu_int_psu <- FindClusters(mu_int_psu, resolution = 0.1, verbose = FALSE)
+#mu_int_psu <- FindClusters(mu_int_psu, resolution = 0.15, verbose = FALSE)
+mu_int_psu <- FindClusters(mu_int_psu, resolution = 0.2, verbose = FALSE)
+#mu_int_psu <- FindClusters(mu_int_psu, resolution = 0.25, verbose = FALSE)
+#mu_int_psu <- FindClusters(mu_int_psu, resolution = 0.3, verbose = FALSE)
+mu_int_psu <- FindClusters(mu_int_psu, resolution = 0.4, verbose = FALSE)
+mu_int_psu <- FindClusters(mu_int_psu, resolution = 0.6, verbose = FALSE)
+mu_int_psu <- FindClusters(mu_int_psu, resolution = 0.8, verbose = FALSE)
+mu_int_psu <- FindClusters(mu_int_psu, resolution = 1, verbose = FALSE)
+```
+
+## UMAPS 
+
+### By cluster
+
+```{r, eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8,1)
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/psu/plots")
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(mu_int_psu) = paste("integrated_snn_res.",res,sep="")
+  png(paste("mu_int_psu_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(mu_int_psu, reduction="umap", label=T, do.return = T, pt.size = 0.25)
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+Idents(mu_int_psu) = 'integrated_snn_res.0.6'
+DimPlot(mu_int_psu, reduction="umap", label=T, do.return = T, pt.size = 0.25)
+```
+
+```{r, eval = FALSE}
+genes = c("Krt14", "Krt5", "Krt1", "Krt10", "Lhx2", "Krt19", 
+"Azgp1", "Krt15", "Sox9", "Cd14", "Cd207", "Cd3e", "Krt16", "Krt6a",
+"Col1a1", "S100a8", "S100a9", "Mgst1", "Apoe", 
+"Xcl1", "Mki67", "Dio2", "Wif1", "Krt15", 
+"Col17a1", "Flg", "Cd34", "Itga6", "Col17a1", "Itgb1", "Itgb4", 
+"Barx2", "Msx2", "Krt25", "Krt27", "Krt71", "Krt79", "Pthlh", 
+"Lgr5", "Lgr6", "Cst6", "Fgf5", "Krt31", "Sparc", "Dcn", "Corin", 
+"Sfrp1", "Edn2", "Tagln","Des","Myh9","Krt35","Acta1",
+"Ptn","Sostdc1","Dkk3","Tnc","Sfrp2","Lamb3", "Itgam","Itgax","Ptn","Sostdc1",
+"Fcgbp","H2-M2","Epgn","Ivl","H2-Aa","Cd74","S100a1","Pcna","Wnt10a")
+
+genes_match = genes[genes %in% rownames(mu_int_psu)]
+
+for (i in 1:length(genes_match))
+{
+  png(paste("mu_int_psu_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = mu_int_psu, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+DefaultAssay(mu_int_psu) = 'RNA'
+FeaturePlot(object = mu_int_psu, features = c("Krt15",'Dio2','Cd200','Phlda11'), cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+DefaultAssay(mu_int_psu) = 'integrated'
+```
+
+### Additional UMAPS
+
+```{r, eval = FALSE}
+png("mu_int_psu_groupby_dataset.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_psu, reduction="umap", label=T, group.by = "dataset", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_psu, reduction="umap", label=T, group.by = "dataset", pt.size = 0.1)
+```
+
+```{r, eval = FALSE}
+png("mu_int_psu_groupby_tissue.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_psu, reduction="umap", label=T, group.by = "tissue", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_psu, reduction="umap", label=T, group.by = "tissue", pt.size = 0.1)
+```
+
+```{r, eval = FALSE}
+png("mu_int_psu_groupby_hfcycle.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_psu, reduction="umap", label=T, group.by = "hf_cycle", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_psu, reduction="umap", label=T, group.by = "hf_cycle", pt.size = 0.1)
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/psu")
+saveRDS(mu_int_psu, file="mu_int_psu.Rds") 
+```
+
+## Find Markers
+
+```{r, eval = FALSE}
+Idents(mu_int_psu) = "integrated_snn_res.0.6"
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/psu")
+markers <- FindAllMarkers(mu_int_psu, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+write.table(markers.filt, file = "mu_int_psu_seurat_markers_res0.6.csv",sep = ",",row.names = T, col.names=T)
+```

@@ -1,0 +1,159 @@
+---
+title: "Processing nsc_int_ife"
+author: "Larry Chen"
+date: "2023-01-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package. 
+```{r install-seurat3.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r load-packages, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+#library(Seurat)
+#library(SeuratObject)
+library(patchwork)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(tibble)
+library(sessioninfo)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+# 1.ISOLATING IFE CELLS FROM NORMAL SKIN SAMPLES
+
+## NSC_INT PREPROCESSING
+
+```{r load-nsc_int}
+nsc_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/nsc/nsc_int.Rds")
+```
+
+### scaling data
+
+```{r scale_nsc_int}
+DefaultAssay(nsc_int) <- "integrated"
+nsc_int <- ScaleData(nsc_int, verbose = FALSE)
+```
+
+### PCA/UMAP
+
+```{r pca-umap-nsc_int}
+nsc_int <- RunPCA(nsc_int, npcs = 30, verbose = FALSE)
+nsc_int <- RunUMAP(nsc_int, reduction = "pca", dims = 1:30)
+```
+
+### Clustering
+
+```{r clustering-nsc_int}
+all_res =  c(0.1,0.2,0.4,0.6,0.8,1,1.2,1.5)
+nsc_int <- FindNeighbors(nsc_int, dims = 1:30, verbose = T)
+
+for (i in all_res){
+  nsc_int <- FindClusters(nsc_int, resolution = i, verbose = FALSE)
+}
+```
+
+### Saving object
+
+```{r save-nsc_int, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/nsc/")
+saveRDS(nsc_int, file="nsc_int.Rds") 
+```
+
+## Graphing
+
+### Defining genes of interest to be graphed
+
+```{r feature_plot_genes-nsc_int}
+DefaultAssay(nsc_int) = "RNA"
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD207","CD3E",
+	"MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1","MKI67",
+	"CCR7","CCL19","SELE","DIO2","WIF1","KRT15","COL17A1","LOR","FLG",
+	"FGF7","SFRP1","NRN1","NOV","FZD10","MMP7",
+	"ATP1A1","ATP1B1","ATP6V1B1","HAS1","RUNX3","KRT77","GJB2","GJB6","DEFB1",
+	"MDK","SEMA3C","PIP","DCD","AQP5","TSPAN8","SCGB1B2P","TMEM213",
+	"IL36G","IL36B","IL36A","IL1A","IL1B","CLEC10A","KRT79","CCL2","CCL27","TNFSF10","ANXA1",
+	"CCL20","KRT6A","KRT6B","KRT16","KRT6C","KRT23","SOSTDC1",
+	"CCR7","CCL19","SELE","DIO2","WIF1","COL17A1","LOR","FLG","TP63","PDPN")
+genes_match = genes[genes %in% rownames(nsc_int)]
+```
+
+### Feature plots
+
+```{r feature_plots-nsc_int, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/nsc/feature_plots/")
+for (i in 1:length(genes_match)){
+  png(paste("nsc_int_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = nsc_int, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+### UMAPs
+
+```{r umaps-nsc_int}
+all_res =  c(0.1,0.2,0.4,0.6,0.8,1,1.2,1.5)
+
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/nsc/umaps/")
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(nsc_int) = paste("integrated_snn_res.",res,sep="")
+  png(paste("nsc_int_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(nsc_int, reduction="umap", label=T, pt.size = 0.1)
+  print(p)
+  dev.off()
+}
+```
+
+### Markers
+
+```{r markers-nsc_int, message = FALSE, eval = FALSE}
+for (i in all_res){
+  Idents(nsc_int) = paste("integrated_snn_res.", i, sep = '')
+  nsc_int.markers = FindAllMarkers(nsc_int, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  write.csv(nsc_int.markers, paste0("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/nsc/nsc_int.markers_",i,".csv"))
+}
+```
+
+## Subsetting IFE cells from nsc_int
+
+Clusters 0-6, 11, 15, 17 \@ resolution 0.4 were identified as IFE cells.
+
+```{r subset-dimplot-nsc_int}
+DimPlot(nsc_int, group.by = "integrated_snn_res.0.4",label = T)
+```
+
+```{r subset-feature-nsc_int}
+DefaultAssay(nsc_int) = "RNA"
+FeaturePlot(object = nsc_int, features = c("KRT1","LHX2","FST","KRT79","CD1C","CD3E"), cols = c("lightgrey", "blue"), pt.size = 1)
+```
+
+```{r subset-nsc_int}
+Idents(nsc_int) = "integrated_snn_res.0.4"
+nsc_int_ife = subset(nsc_int, idents = c(0,1,2,3,4,6,11,15,17))
+```
+
+### save object
+
+```{r save-nsc_int_ife, eval = FALSE}
+saveRDS(nsc_int_ife, "C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/nsc/nsc_int_ife/nsc_int_ife.Rds")
+```

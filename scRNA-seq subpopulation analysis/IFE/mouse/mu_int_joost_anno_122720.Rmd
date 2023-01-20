@@ -1,0 +1,230 @@
+---
+title: "Adding Joost annotations to Mouse Data"
+author: "Larry Chen"
+date: "2023-01-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package. 
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+```
+
+```{r, eval = FALSE}
+mu_int = readRDS("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_all_int.Rds") 
+```
+## Load in Simon Joost's annotations
+```{r, eval = FALSE}
+sj_main_metadata = read.table("/scratch/groups/khavari/users/andrewji/mu_all/integrated/joost_2020_metadata/201806201840_cl_c_2nd.txt",
+	sep="\t",header=T,stringsAsFactors=F)
+sj_val_metadata = read.table("/scratch/groups/khavari/users/andrewji/mu_all/integrated/joost_2020_metadata/201806201840_MKnew_logit_2nd.txt",
+	sep="\t",row.names=1,header=T,stringsAsFactors=F)
+sj_val_metadata = t(sj_val_metadata)
+sj_val_pred = as.matrix(sj_val_metadata[,52])
+sj_val_types = unique(sj_val_pred[,1])
+sj_celltypes = read.table("/scratch/groups/khavari/users/andrewji/mu_all/integrated/joost_2020_metadata/cluster_names.txt",sep = "\t",
+                          header=F, stringsAsFactors = F)
+```
+
+## Change designations in tables to sj_celltypes
+```{r, eval = FALSE}
+sj_ct_split = strsplit(sj_celltypes[,1],":")
+sj_ct_desig = unlist(lapply(sj_ct_split,"[[",1))
+sj_ct_names = unlist(lapply(sj_ct_split,"[[",2))
+sj_ct_names = substr(sj_ct_names,1,nchar(sj_ct_names)-1)
+sj_celltypes_new = cbind(sj_ct_desig,sj_ct_names)
+```
+
+
+## Match main barcodes with mu_int_metadata barcodes 
+### Pull main barcodes
+```{r, eval = FALSE}
+mu_int_metadata = mu_int@meta.data
+mu_int_main = subset(mu_int_metadata, main_val=="Main")
+main_5w = subset(mu_int_metadata, main_val=="Main" & hf_cycle=="ANA")
+main_5w_cells = rownames(main_5w)
+main_5w_cells_split = strsplit(main_5w_cells,"_")
+main_5w_bars = unlist(lapply(main_5w_cells_split,"[[",4))
+main_5w_bars_add = paste(main_5w_bars,"-5w",sep="")
+match_5w_main_bars = match(main_5w_bars_add,sj_main_metadata[,1])
+```
+
+```{r, eval = FALSE}
+sj_anno = mu_int$orig.ident
+sj_anno[match(main_5w_cells,colnames(mu_int))] = sj_main_metadata[match_5w_main_bars,2]
+mu_int$sj_anno = sj_anno
+#DimPlot(mu_int,group.by = "sj_anno")
+```
+
+### Repeat with 9w cells main
+```{r, eval = FALSE}
+main_9w = subset(mu_int_metadata, main_val=="Main" & hf_cycle=="TEL")
+main_9w_cells = rownames(main_9w)
+main_9w_cells_split = strsplit(main_9w_cells,"_")
+main_9w_bars = unlist(lapply(main_9w_cells_split,"[[",4))
+main_9w_bars_add = paste(main_9w_bars,"-9w",sep="")
+match_9w_main_bars = match(main_9w_bars_add,sj_main_metadata[,1])
+sj_anno[match(main_9w_cells,colnames(mu_int))] = sj_main_metadata[match_9w_main_bars,2]
+mu_int$sj_anno = sj_anno
+#DimPlot(mu_int,group.by = "sj_anno")
+```
+
+### Check sj_anno
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/plots")
+png("mu_int_labelby_sj_anno_main_only.png", units = "in", height = 5, width = 8, res=300)
+DimPlot(mu_int, reduction = "umap", group.by = "sj_anno")
+dev.off()
+```
+
+
+## Validation dataset, change barcodes to match mu_int_metadata
+```{r, eval = FALSE}
+val_5w = subset(mu_int_metadata, main_val=="Val" & hf_cycle=="ANA")
+val_5w_cells = rownames(val_5w)
+val_5w_cells_split = strsplit(val_5w_cells,"_")
+val_5w_bars = unlist(lapply(val_5w_cells_split,"[[",4))
+val_5w_bars_split = strsplit(val_5w_bars,"-")
+val_5w_bars_pure = unlist(lapply(val_5w_bars_split,"[[",1))
+val_5w_rep = unlist(lapply(val_5w_cells_split,"[[",3))
+val_5w_rep_change = gsub("5wk1",".A1",val_5w_rep)
+val_5w_rep_change = gsub("5wk2",".A2",val_5w_rep_change)
+val_5w_rep_change = gsub("5wk3",".A3",val_5w_rep_change)
+val_5w_bars_add = paste(val_5w_bars_pure,val_5w_rep_change,sep="")
+match_5w_val_bars = match(val_5w_bars_add,rownames(sj_val_metadata))
+sj_anno[match(val_5w_cells,colnames(mu_int))] = sj_val_pred[match_5w_val_bars,1]
+mu_int$sj_anno = sj_anno
+#DimPlot(mu_int,group.by = "sj_anno")
+```
+
+```{r, eval = FALSE}
+val_9w = subset(mu_int_metadata, main_val=="Val" & hf_cycle=="TEL")
+val_9w_cells = rownames(val_9w)
+val_9w_cells_split = strsplit(val_9w_cells,"_")
+val_9w_bars = unlist(lapply(val_9w_cells_split,"[[",4))
+val_9w_bars_split = strsplit(val_9w_bars,"-")
+val_9w_bars_pure = unlist(lapply(val_9w_bars_split,"[[",1))
+val_9w_rep = unlist(lapply(val_9w_cells_split,"[[",3))
+val_9w_rep_change = gsub("9wk1",".T1",val_9w_rep)
+val_9w_rep_change = gsub("9wk2",".T2",val_9w_rep_change)
+val_9w_rep_change = gsub("9wk3",".T3",val_9w_rep_change)
+val_9w_bars_add = paste(val_9w_bars_pure,val_9w_rep_change,sep="")
+match_9w_val_bars = match(val_9w_bars_add,rownames(sj_val_metadata))
+sj_anno[match(val_9w_cells,colnames(mu_int))] = sj_val_pred[match_9w_val_bars,1]
+mu_int$sj_anno = sj_anno
+#DimPlot(mu_int,group.by = "sj_anno")
+```
+
+## Check sj_anno
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/plots")
+png("mu_int_labelby_sj_anno.png", units = "in", height = 5, width = 8.5, res=300)
+DimPlot(mu_int, reduction = "umap", group.by = "sj_anno")
+dev.off()
+```
+
+## Check annotations
+```{r, eval = FALSE}
+table(mu_int$integrated_snn_res.0.6,mu_int$sj_anno)
+prop.table(table(mu_int$integrated_snn_res.0.6,mu_int$sj_anno),margin=1)
+```
+
+## Replace names with more intuitive names from cluster_names.txt
+```{r, eval = FALSE}
+cell_types = c("uw1", "uw2", "ANA - 13", "IMM - 2", "ANA - 2", "ANA - 11", 
+"ANA - 15", "JUNK", "ANA - 18", "ANA - 5", "ANA - 3", "ANA - 1", 
+"EPI - 2", "FIB - 2", "ANA - 16", "EPI - 1", "FIB - 3", "EPI - 4", 
+"FIB - 5", "ANA - 21", "ANA - 7", "MEL - 2", "EPI - 0", "ANA - 8", 
+"ANA - 6", "MISC - 1", "ANA - 14", "EPI - 3", "EPI - 7", "ANA - 4", 
+"EPI - 5", "ANA - 12", "VASC - 1", "MISC - 0", "ANA - 17", "EPI - 6", 
+"ANA - 10", "VASC - 2", "ANA - 20", "ANA - 0", "VASC - 0", "MEL - 1", 
+"IMM - 1", "IMM - 4", "FIB - 6", "IMM - 0", "MEL - 0", "IMM - 3", 
+"VASC - 3", "IMM - 5", "EPI - 8","FIB - 1", "FIB - 0", "FIB - 4"
+)
+match_idx = match(cell_types,sj_celltypes_new[,1])
+replace_celltypes = sj_celltypes_new[match_idx,2]
+replace_celltypes[1:2] = c("uw1","uw2")
+replace_celltypes[8] = "JUNK"
+replace_celltypes[24] = "IRS2" # IRS2 = "ANA - 8"
+```
+
+```{r, eval = FALSE}
+sj_anno_names = sj_anno
+for (i in 1:length(cell_types))
+{
+  #sj_anno_names = gsub(paste(cell_types[i],"$",sep=""),replace_celltypes[i],sj_anno_names)
+  match_idx = which(sj_anno==cell_types[i])
+  sj_anno_names[match_idx] = replace_celltypes[i]
+  print(cell_types[i])
+}
+sj_anno_names_add = paste("mu_",sj_anno_names,sep="")
+mu_int$sj_anno_names = sj_anno_names_add
+mu_int$sj_anno_nomu = sj_anno_names
+#DimPlot(mu_int,group.by = "sj_anno_names")
+```
+
+
+### Check sj_anno_names
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/plots")
+png("mu_int_labelby_sj_anno_names.png", units = "in", height = 5, width = 9, res=300)
+DimPlot(mu_int, reduction = "umap", group.by = "sj_anno_names")
+dev.off()
+png("mu_int_labelby_sj_anno_names_label.png", units = "in", height = 5, width = 9, res=300)
+DimPlot(mu_int, reduction = "umap", label=T, group.by = "sj_anno_names")
+dev.off()
+png("mu_int_labelby_sj_anno_nomu.png", units = "in", height = 5, width = 8.5, res=300)
+DimPlot(mu_int, reduction = "umap", group.by = "sj_anno_nomu")
+dev.off()
+png("mu_int_labelby_sj_anno_nomus_label.png", units = "in", height = 5, width = 8.5, res=300)
+DimPlot(mu_int, reduction = "umap", label=T, group.by = "sj_anno_nomu")
+dev.off()
+```
+
+```{r, eval = FALSE}
+prop.table(table(mu_int$integrated_snn_res.0.6,mu_int$sj_anno_names),margin=1)
+```
+
+## Prop of joost only cells
+```{r, eval = FALSE}
+mu_int_SJ_metadata = subset(mu_int_metadata, dataset=="SJ")
+prop.table(table(mu_int_SJ_metadata[,"integrated_snn_res.0.6"],mu_int_SJ_metadata[,"sj_anno_names"]),margin=1)
+```
+
+
+## Plot UMAP by res 0.6
+```{r, eval = FALSE}
+res = 0.6
+Idents(mu_int) = paste("integrated_snn_res.",res,sep="")
+my_levels = 0:28
+Idents(mu_int) = factor(x = Idents(mu_int), levels = my_levels)
+png(paste("mu_int_res_",res,"_noaxes_nolabel_color_order.png",sep=""), units = "in", height = 5, width = 6.5, res=300)
+p=DimPlot(mu_int, reduction="umap", label=F, pt.size = 0.1)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+
+## Save Metadata
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/")
+mu_int_metadata = as.matrix(mu_int@meta.data)
+write.table(mu_int_metadata,file="mu_int_metadata.txt",sep="\t",col.names=T,row.names=T)
+```
+
+## Save updated object
+```{r, eval = FALSE}
+saveRDS(mu_int, file="mu_int.Rds") 
+```

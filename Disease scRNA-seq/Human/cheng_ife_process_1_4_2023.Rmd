@@ -1,0 +1,200 @@
+---
+title: "Creating cheng_ife from pso_cheng_ife and nsc_int_ife"
+author: "Larry Chen"
+date: "2023-01-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package. 
+```{r install-seurat4.1, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r load-packages, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+#library(Seurat)
+#library(SeuratObject)
+library(patchwork)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(tibble)
+library(sessioninfo)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+### Importing files
+```{r import-files}
+pso_cheng_ife = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/pso_cheng/pso_cheng_ife/pso_cheng_ife.Rds")
+nsc_int_ife = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/nsc/nsc_int_ife/nsc_int_ife.Rds")
+```
+
+# 3. MERGING INTO CHENG_IFE
+
+MERGING pso_cheng_ife AND nsc_int_ife to create cheng_ife
+
+```{r merge-cheng_ife_no_int}
+DefaultAssay(pso_cheng_ife) = "RNA"
+DefaultAssay(nsc_int_ife) = "RNA"
+cheng_ife_no_int = merge(pso_cheng_ife,nsc_int_ife)
+```
+
+### PREPROCESS DATA
+
+### Integrate
+
+```{r split-cheng_ife_no_int}
+hu.list <- SplitObject(cheng_ife_no_int, split.by = "sample")
+```
+
+```{r normalize-cheng_ife_no_int}
+# Normalize all objects
+for (i in 1:length(hu.list)) {
+    hu.list[[i]] <- NormalizeData(hu.list[[i]], verbose = FALSE)
+    hu.list[[i]] <- FindVariableFeatures(hu.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+    print(i)
+}
+```
+
+```{r integrate-cheng_ife_no_int, message = FALSE}
+reference.list <- hu.list
+hu.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+
+cheng_ife <- IntegrateData(anchorset = hu.anchors, dims = 1:30)
+print(dim(cheng_ife))
+```
+
+### Scale Data
+
+```{r scale-cheng_ife}
+DefaultAssay(cheng_ife) <- "integrated"
+
+cheng_ife <- ScaleData(cheng_ife, verbose = FALSE)
+cheng_ife <- RunPCA(cheng_ife, npcs = 30, verbose = FALSE)
+cheng_ife <- RunUMAP(cheng_ife, reduction = "pca", dims = 1:30)
+```
+
+### Check Integration Quality
+
+Using UMAP labeled by sample
+
+```{r check-integration-cheng_ife}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/cheng_ife")
+
+png("cheng_ife_labelbysample.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(cheng_ife, reduction = "umap", group.by = "sample")
+print(p1)
+dev.off()
+```
+
+### Clustering
+
+```{r clust-cheng_ife}
+all_res = c(0.1,0.2,0.4,0.6,0.8,1,1.2,1.5)
+cheng_ife <- FindNeighbors(cheng_ife, dims = 1:30, verbose = T)
+
+for (i in all_res){
+  cheng_ife <- FindClusters(cheng_ife, resolution = i, verbose = FALSE)
+}
+```
+
+### UMAPS
+
+```{r umap-cheng_ife}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/cheng_ife")
+all_res = c(0.1,0.2,0.4,0.6,0.8,1,1.2,1.5)
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(cheng_ife) = paste("integrated_snn_res.",res,sep="")
+  png(paste("cheng_ife_UMAP_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(cheng_ife, reduction="umap", label=T, pt.size = 0.25)
+  print(p)
+  dev.off()
+}
+```
+
+### Feature Maps
+
+```{r feature-cheng_ife}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/cheng_ife")
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD207","CD3E",
+  "MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1","MKI67",
+  "CCR7","CCL19","SELE","DIO2","WIF1","KRT15","COL17A1","LOR","FLG",
+  "FGF7","SFRP1","NRN1","NOV","FZD10","MMP7",
+  "ATP1A1","ATP1B1","ATP6V1B1","HAS1","RUNX3","KRT77","GJB2","GJB6","DEFB1",
+  "MDK","SEMA3C","PIP","DCD","AQP5","TSPAN8","SCGB1B2P","TMEM213",
+  "IL36G","IL36B","IL36A","IL1A","IL1B","CLEC10A","KRT79","CCL2","CCL27","TNFSF10","ANXA1",
+  "CCL20","KRT6A","KRT6B","KRT16","KRT6C","KRT23","SOSTDC1",
+  "CCR7","CCL19","SELE","DIO2","WIF1","COL17A1","LOR","FLG","TP63","PDPN","PCNA","TOP2A",
+  "MT1G","MT1E","MT1H","MT1X","RHOV","DMKN","HES1","HES4","KRT1","KRT10","DSP","CCND1","THBD","GATA3")
+
+genes_match = genes[genes %in% rownames(cheng_ife)]
+
+for (i in 1:length(genes_match))
+{
+  png(paste("cheng_ife_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = cheng_ife, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+### Cell Cycle Scoring
+
+```{r cc-cheng_ife}
+
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+cheng_ife <- CellCycleScoring(cheng_ife, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+```
+
+### UMAPS by Cell Cycle Scores
+
+```{r cc-umap-cheng_ife}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/psoriasis/hu/cheng_ife")
+Idents(cheng_ife) = 'Phase'
+png("cheng_ife_labelby_ccphase_2d.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(cheng_ife, reduction = "umap")
+print(p1)
+dev.off()
+cols = c("palevioletred","goldenrod","turquoise3")
+```
+
+
+### Marker lists
+
+```{r markerlist-cheng_ife, message= FALSE, eval = FALSE}
+#SAVING MARKER LISTS
+all_res = c(0.1,0.2,0.4,0.6,0.8,1,1.2,1.5)
+for (i in all_res){
+  Idents(cheng_ife) = paste("integrated_snn_res.", i, sep = '')
+  cheng_ife.markers = FindAllMarkers(cheng_ife, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  write.csv(cheng_ife.markers, paste0("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife.markers_",i,".csv"))
+}
+```
+
+### Saving Object
+
+```{r save-cheng_ife, eval = FALSE}
+saveRDS(cheng_ife, file="C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife.Rds") 
+```
+### SAVE METADATA
+
+```{r save-metadata-cheng_ife, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/")
+write.csv(cheng_ife@meta.data ,file="cheng_ife_metadata.csv")
+```

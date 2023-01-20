@@ -1,0 +1,238 @@
+---
+title: "Editing Joost annotations for mouse data"
+author: "Larry Chen"
+date: "2023-01-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(RColorBrewer)
+library(gplots)
+library(scales)
+```
+
+```{r}
+mu_int = readRDS(file="C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/mu_all_int.Rds")
+```
+
+```{r}
+mu_int_metadata = read.table("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/mu_int_metadata.txt", sep="\t",row.names=1,header=T,stringsAsFactors = F)
+```
+
+## Prop of joost only cells
+
+```{r}
+
+# mu_int_SJ_metadata = subset(mu_int_metadata, dataset=="SJ")
+# prop.table(table(mu_int_SJ_metadata[,"integrated_snn_res.0.6"],mu_int_SJ_metadata[,"sj_anno_names"]),margin=1)
+
+sj_cluster_names = c("uw1", "uw2", "GL3", "DC", "ORS B1", "CX5", "GL2", "JUNK", 
+                     "IRS1", "MED2", "ORS B2", "ORS S", "IFE SB1", "DS2", "GL4", "IFE B", 
+                     "FIB1", "uHF B", "FIB3", "mCP", "CX3", "MEL2", "IFE C", "IRS2", 
+                     "CX2", "SM", "CX1", "IFE SB2", "OB", "MED3", "uHF SB", "GL1", 
+                     "LV", "RBC", "MED1", "SG", "CX4", "EC2", "LPC", "uCP", "vSM", 
+                     "MEL1", "MC2", "MC1", "FIB4", "LC", "SC", "TC", "EC1", "MC3", 
+                     "HG", NA, "DS1", "tDP", "FIB2")
+sj_cluster_names_add = paste("mu_",sj_cluster_names,sep="")
+# keep_anno = c("mu_GL3", "mu_DC", "mu_ORS B1", "mu_CX5", 
+#               "mu_GL2", "mu_IRS1", "mu_MED2", "mu_ORS B2", "mu_ORS S", 
+#               "mu_IFE SB1", "mu_FIB - 2", "mu_GL4", "mu_IFE B", "mu_FIB - 3", 
+#               "mu_uHF B", "mu_FIB - 5", "mu_mCP", "mu_CX3", "mu_MEL - 2", "mu_IFE C", 
+#               "mu_IRS2", "mu_CX2", "mu_SM", "mu_CX1", "mu_IFE SB2", "mu_OB", 
+#               "mu_MED3", "mu_uHF SB", "mu_GL1", "mu_VASC - 1", 
+#               "mu_MED1", "mu_SG", "mu_CX4", "mu_EC2", "mu_LPC", "mu_uCP", "mu_vSM", 
+#               "mu_MEL - 1", "mu_IMM - 1", "mu_IMM - 4", "mu_FIB - 6", "mu_IMM - 0", 
+#               "mu_MEL - 0", "mu_TC", "mu_VASC - 3", "mu_IMM - 5", "mu_HG", 
+#               "mu_DS1", "mu_FIB - 0", "mu_FIB - 4")
+keep_anno_nomu = c("GL3", "DC", "ORS B1", "CX5", "GL2", 
+                   "IRS1", "MED2", "ORS B2", "ORS S", "IFE SB1", "DS2", "GL4", "IFE B", 
+                   "FIB1", "uHF B", "FIB3", "mCP", "CX3", "MEL2", "IFE C", "IRS2", 
+                   "CX2", "SM", "CX1", "IFE SB2", "OB", "MED3", "uHF SB", "GL1", 
+                   "LV", "RBC", "MED1", "SG", "CX4", "EC2", "LPC", "uCP", "vSM", 
+                   "MEL1", "MC2", "MC1", "FIB4", "LC", "SC", "TC", "EC1", "MC3", 
+                   "HG", "DS1", "tDP", "FIB2")
+
+mu_int$sj_anno_nomu = mu_int_metadata$sj_anno_nomu
+Idents(mu_int) = "sj_anno_nomu"
+keep_cells= WhichCells(mu_int,idents = keep_anno_nomu)
+```
+
+```{r, eval = FALSE}
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/Figure_S2/mouse')
+png("mu_int_labelby_sj_anno_nomu_confident.png", units = "in", height = 5, width = 8.25, res=300)
+DimPlot(mu_int, reduction = "umap", label=T, group.by = "sj_anno_nomu", cells = keep_cells)
+dev.off()
+png("mu_int_labelby_sj_anno_nomus_confident_nolabel.png", units = "in", height = 5, width = 8.25, res=300)
+DimPlot(mu_int, reduction = "umap", label=F, group.by = "sj_anno_nomu", cells = keep_cells)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int, reduction = "umap", label=T, group.by = "sj_anno_nomu", cells = keep_cells)
+```
+
+### Proportion of confident SJ annotated cells (agreement with Seurat)
+
+```{r}
+mu_int_sj_table = table(mu_int_metadata[keep_cells,"integrated_snn_res.0.6"],mu_int_metadata[keep_cells,"sj_anno_nomu"])
+mu_int_sj_table_keep = mu_int_sj_table[,keep_anno_nomu]
+
+mu_int_sj_table_keep_prop = prop.table(mu_int_sj_table_keep,margin=2)
+```
+
+```{r}
+input_mat = as.matrix(mu_int_sj_table_keep_prop)
+colors = c(seq(0,1,length=22))
+my_palette <- rev(colorRampPalette(brewer.pal(6,"RdBu"))(n = 21))   # the n needs to be one less than the length of the colors list 
+my_palette <- colorRampPalette(brewer.pal(6,"Blues"))(n = 21)  # the n needs to be one less than the length of the colors list 
+```
+
+```{r, eval = FALSE}
+show_col(viridis_pal(alpha = 1,begin = -0.5,end=1,direction = 1)(10))
+show_col(viridis_pal()(20))
+color.mat = viridis_pal()(21)
+setwd("~/Dropbox/mu_all/integrated")
+pdf("mu_int_res0.6_sj_anno_names_prop_clustered.pdf", width = 7.5, height=7)
+hm2_call = heatmap.2(
+  as.matrix(input_mat),
+  col=my_palette,
+  breaks=colors,
+  density.info="none",
+  trace="none",
+  Rowv=T,
+  Colv=T,
+  #ColSideColors = cluster_cols,
+  dendrogram="both",
+  symm=F,
+  #labRow=colors,
+  #labCol = "",
+  margins=c(6,6),
+  scale="none",
+  cexRow=0.5,
+  cexCol=0.5,
+  colsep=c(0:ncol(input_mat)),
+  rowsep = c(0:nrow(input_mat)),
+  sepcolor="black",
+  sepwidth=c(0.001,0.01),
+  #cellnote=round(input_mat,2),
+  notecol="black",
+  notecex=0.5,
+  key=T)
+dev.off()
+```
+
+```{r, eval = FALSE}
+keep_anno_order = c("IFE B","IFE C","IFE SB1",  "IFE SB2",
+                    "OB", "HG", "ORS B1","ORS B2","ORS S","uHF B","uHF SB","LPC", "mCP","uCP",
+                    "SG",
+                    "GL1","GL2","GL3","GL4","IRS1","IRS2", "CX1", "CX2","CX3","CX4","CX5", "MED1", "MED2","MED3", 
+                    "FIB1","FIB2","FIB3", "FIB4","DS1","DS2","tDP","SM","vSM", 
+                    "MEL1", "MEL2", 
+                     "EC1","EC2","LV",
+                    "LC","DC", "MC1","MC2","MC3","TC","SC","RBC")
+```
+
+```{r, eval = FALSE}
+input_mat =  as.matrix(mu_int_sj_table_keep_prop[,keep_anno_order])
+pdf("mu_int_res0.6_sj_anno_names_prop_ordered.pdf", width = 7.5, height=7)
+hm2_call = heatmap.2(
+  as.matrix(input_mat),
+  col=my_palette,
+  breaks=colors,
+  density.info="none",
+  trace="none",
+  Rowv=T,
+  Colv=F,
+  #ColSideColors = cluster_cols,
+  dendrogram="row",
+  symm=F,
+  #labRow=colors,
+  #labCol = "",
+  margins=c(6,6),
+  scale="none",
+  cexRow=0.5,
+  cexCol=0.5,
+  colsep=c(0:ncol(input_mat)),
+  rowsep = c(0:nrow(input_mat)),
+  sepcolor="black",
+  sepwidth=c(0.001,0.01),
+  #cellnote=round(input_mat,2),
+  notecol="black",
+  notecex=0.5,
+  key=T)
+dev.off()
+```
+
+```{r, eval = FALSE}
+order_clus = as.character(c(0,4,12,22,3,9,10,14,19,5,7,24,1,2,21,18,13,6,8,16,28,26,25,20,23,11,15,27,17))
+input_mat =  as.matrix(mu_int_sj_table_keep_prop[order_clus,keep_anno_order])
+pdf("mu_int_res0.6_sj_anno_names_prop_both_ordered.pdf", width = 7.5, height=7)
+hm2_call = heatmap.2(
+  as.matrix(input_mat),
+  col=my_palette,
+  breaks=colors,
+  density.info="none",
+  trace="none",
+  Rowv=F,
+  Colv=F,
+  #ColSideColors = cluster_cols,
+  dendrogram="none",
+  symm=F,
+  #labRow=colors,
+  #labCol = "",
+  margins=c(6,6),
+  scale="none",
+  cexRow=0.5,
+  cexCol=0.5,
+  colsep=c(0:ncol(input_mat)),
+  rowsep = c(0:nrow(input_mat)),
+  sepcolor="black",
+  sepwidth=c(0.001,0.01),
+  #cellnote=round(input_mat,2),
+  notecol="black",
+  notecex=0.5,
+  key=T)
+dev.off()
+```
+
+```{r, echo = FALSE}
+hm2_call = heatmap.2(
+  as.matrix(input_mat),
+  col=my_palette,
+  breaks=colors,
+  density.info="none",
+  trace="none",
+  Rowv=F,
+  Colv=F,
+  #ColSideColors = cluster_cols,
+  dendrogram="none",
+  symm=F,
+  #labRow=colors,
+  #labCol = "",
+  margins=c(6,6),
+  scale="none",
+  cexRow=0.5,
+  cexCol=0.5,
+  colsep=c(0:ncol(input_mat)),
+  rowsep = c(0:nrow(input_mat)),
+  sepcolor="black",
+  sepwidth=c(0.001,0.01),
+  #cellnote=round(input_mat,2),
+  notecol="black",
+  notecex=0.5,
+  key=T)
+```

@@ -1,0 +1,243 @@
+---
+title: "Isolating human mesenchymal/fibroblast cells"
+author: "Larry Chen"
+date: "2023-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-load, include = FALSE}
+ns_int_fib = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_fib.Rds")
+```
+## load object
+```{r, eval = FALSE}
+ns_int = readRDS("/scratch/groups/khavari/users/andrewji/ns_int/ns_int.Rds")
+DefaultAssay(ns_int) = "RNA"
+```
+
+## Subset mesenchymal cells
+```{r, eval = FALSE}
+res = 0.6
+Idents(ns_int) = paste("integrated_snn_res.",res,sep="")
+ns_int_fib = subset(ns_int, idents = 6)
+#saveRDS(ns_int_fib, file="ns_int_fib.Rds")
+```
+
+##Adding in fibroblasts that clustered with PSU cells
+We first import the PSU cell dataset.
+```{r, eval = FALSE}
+ns_int_psu_noecc = readRDS("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu_noecc/ns_int_psu_noecc.Rds")
+DefaultAssay(ns_int_psu_noecc) = "RNA"
+```
+We then select cluster 5 at RNA resolution 0.6, which represents the fibroblasts.
+```{r, eval = FALSE}
+Idents(ns_int_psu_noecc) = "RNA_snn_res.0.6"
+# Filter out cluster 5, which are fibroblasts
+ns_int_psu_fib = subset(ns_int_psu_noecc, idents = 5)
+```
+Finally, we merge the errant cluster with the rest of the mesenchymal cells. 
+```{r, eval = FALSE}
+ns_int_fib = merge(ns_int_fib, ns_int_psu_fib)
+```
+
+## Split object
+We only selected samples that had more than 100 cells.
+```{r, eval = FALSE}
+ns.list <- SplitObject(ns_int_fib, split.by = "sample")
+
+x=which(table(ns_int_fib$sample)>100)
+# sample_keep = c("abd4", "br41epi", "br53epi", "P1", "P10", "P2", "P5", "P6", 
+# "P7", "P9", "rt1", "s11", "SC18control", "SC34control", "scalp26", 
+# "scalp32")
+sample_keep = names(x)
+ns.list = ns.list[sample_keep]
+```
+
+## Preprocessing
+```{r, eval = FALSE}
+for (i in 1:length(ns.list)) {
+    ns.list[[i]] <- NormalizeData(ns.list[[i]], verbose = FALSE)
+    ns.list[[i]] <- FindVariableFeatures(ns.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+}
+```
+```{r, eval = FALSE}
+reference.list <- ns.list
+ns.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30, k.filter = 100)
+
+ns_int_fib <- IntegrateData(anchorset = ns.anchors, dims = 1:30)
+```
+
+## Scale/PCA/UMAP
+```{r, eval = FALSE}
+DefaultAssay(ns_int_fib) <- "integrated"
+ns_int_fib <- ScaleData(ns_int_fib, verbose = FALSE)
+ns_int_fib <- RunPCA(ns_int_fib, npcs = 30, verbose = FALSE)
+ns_int_fib <- RunUMAP(ns_int_fib, reduction = "pca", dims = 1:30)
+```
+
+
+## Clustering 
+```{r, eval = FALSE}
+ns_int_fib <- FindNeighbors(ns_int_fib, dims = 1:30, verbose = T)
+ns_int_fib <- FindClusters(ns_int_fib, resolution = 0.1, verbose = FALSE)
+#ns_int_fib <- FindClusters(ns_int_fib, resolution = 0.15, verbose = FALSE)
+ns_int_fib <- FindClusters(ns_int_fib, resolution = 0.2, verbose = FALSE)
+#ns_int_fib <- FindClusters(ns_int_fib, resolution = 0.25, verbose = FALSE)
+#ns_int_fib <- FindClusters(ns_int_fib, resolution = 0.3, verbose = FALSE)
+ns_int_fib <- FindClusters(ns_int_fib, resolution = 0.4, verbose = FALSE)
+ns_int_fib <- FindClusters(ns_int_fib, resolution = 0.6, verbose = FALSE)
+ns_int_fib <- FindClusters(ns_int_fib, resolution = 0.8, verbose = FALSE)
+```
+
+## Save Object
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_fib")
+saveRDS(ns_int_fib, file="ns_int_fib.Rds") 
+```
+
+## UMAPS
+### By sample
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_fib/plots")
+png("ns_int_fib_labelby_sample.png", units = "in", height = 5, width = 8, res=300)
+DimPlot(ns_int_fib, reduction = "umap", group.by = "sample")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_fib, reduction = "umap", group.by = "sample")
+```
+
+### By dataset
+```{r, eval = FALSE}
+png("ns_int_fib_labelby_dataset.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_fib, reduction = "umap", group.by = "dataset")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_fib, reduction = "umap", group.by = "dataset")
+```
+
+### By subcell
+```{r, eval = FALSE}
+png("ns_int_fib_labelby_subcell.png", units = "in", height = 5, width = 8, res=300)
+DimPlot(ns_int_fib, reduction = "umap", group.by = "subcell")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_fib, reduction = "umap", group.by = "subcell")
+```
+
+### By percent.mt
+```{r, eval = FALSE}
+png("ns_int_fib_labelby_percentmt.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int_fib, features = "percent.mt")
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(ns_int_fib, features = "percent.mt")
+```
+
+### by nCount_RNA
+```{r, eval = FALSE}
+png("ns_int_fib_labelby_nUMI.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int_fib, features = "nCount_RNA")
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(ns_int_fib, features = "nCount_RNA")
+```
+
+### by nFeature_RNA
+```{r, eval = FALSE}
+png("ns_int_fib_labelby_nFeature.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int_fib, features = "nFeature_RNA")
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(ns_int_fib, features = "nFeature_RNA")
+```
+
+### by clusters
+```{r, eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8)
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(ns_int_fib) = paste("integrated_snn_res.",res,sep="")
+  png(paste("ns_int_fib_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(ns_int_fib, reduction="umap", label=T, do.return = T, pt.size = 0.1)
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+Idents(ns_int_fib) = "integrated_snn_res.0.6"
+DimPlot(ns_int_fib, reduction="umap", label=T, do.return = T, pt.size = 0.1)
+```
+
+## Feature Plots
+```{r, eval = FALSE}
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD163","CD207",
+	"CD3E","MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1",
+	"KRT23","KRT25","KRT6A","KRT16","KRT17","PPARG","DIO2","COMP","FGF7","COL17A1","TP63","PTN","SAT1","SOX4","KLF5","TNC",
+	"PTHLH","MT1X","MT1G","MT1H","MT1E","SFRP1","DMKN","ZNF750","IVL","SOSTDC1","FGF18","IL37","IL1F10","IL36RN","IL1RN",
+	"MDK","LGALS1","CD151","ITGB1","MKI67","LUM","COL6A1","SOX2","DHRS9","LCE1E","PIP",
+	"CORIN","NOG","FGF10","BMP2","BMP4","BMP7","MCAM","ACTA2","DES","MYH9","CCDC80","DPP4","SPARC","LUM","SFRP2","FMO1",
+	"LSP1","CRABP1","COL11A1")
+
+#genes = "MT-CYB"
+DefaultAssay(ns_int_fib) = "RNA"
+genes_match = genes[genes %in% rownames(ns_int_fib)]
+
+for (i in 1:length(genes_match))
+{
+  png(paste("ns_int_fib_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = ns_int_fib, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+## Find Markers
+```{r, eval = FALSE}
+Idents(ns_int_fib) = "integrated_snn_res.0.6"
+markers <- FindAllMarkers(ns_int_fib, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+write.table(markers.filt, file = "ns_int_fib_seurat_markers_res0.6.csv",sep = ",",row.names = T, col.names=T)
+```

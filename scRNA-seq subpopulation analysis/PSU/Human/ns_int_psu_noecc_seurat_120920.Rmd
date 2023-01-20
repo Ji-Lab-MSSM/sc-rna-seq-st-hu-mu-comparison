@@ -1,0 +1,281 @@
+---
+title: "Isolating human PSU cells"
+author: "Larry Chen"
+date: "2023-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-load, include = FALSE}
+ns_int_psu_noecc = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_psu_noecc.Rds")
+```
+
+## Load Object
+
+```{r, eval = FALSE}
+ns_int = readRDS("/scratch/groups/khavari/users/andrewji/ns_int/ns_int.Rds")
+DefaultAssay(ns_int) = "RNA"
+```
+
+## Subset object
+
+Remove eccrine cells
+
+```{r, eval = FALSE}
+res = 0.6
+Idents(ns_int) = paste("integrated_snn_res.",res,sep="")
+ns_int_psu_noecc = subset(ns_int, idents = c(7,8,12,14,19,20))
+```
+
+## Split objects and choose samples
+
+```{r, eval = FALSE}
+ns.list <- SplitObject(ns_int_psu_noecc, split.by = "sample")
+
+#x=which(table(ns_int_psu_noecc$sample)>120)
+sample_keep = c("abd4", "br41epi", "br53epi", "P1", "P10", "P2", "P5", "P6", "P3",
+"P7", "P9", "rt1","rt2", "s11", "SC1control", "SC18control", "SC32control", "SC33control", "SC34control", "SC4control","scalp26", 
+"scalp32")
+ns.list = ns.list[sample_keep]
+```
+
+## Preprocessing
+
+```{r, eval = FALSE}
+for (i in 1:length(ns.list)) {
+    ns.list[[i]] <- NormalizeData(ns.list[[i]], verbose = FALSE)
+    ns.list[[i]] <- FindVariableFeatures(ns.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+}
+```
+
+## Integrate
+
+```{r, eval = FALSE}
+reference.list <- ns.list
+ns.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30, k.filter = 85)
+
+ns_int_psu_noecc <- IntegrateData(anchorset = ns.anchors, dims = 1:30)
+```
+
+## Scale/PCA/UMAP
+
+```{r, eval = FALSE}
+DefaultAssay(ns_int_psu_noecc) <- "integrated"
+ns_int_psu_noecc <- ScaleData(ns_int_psu_noecc, verbose = FALSE)
+ns_int_psu_noecc <- RunPCA(ns_int_psu_noecc, npcs = 30, verbose = FALSE)
+ns_int_psu_noecc <- RunUMAP(ns_int_psu_noecc, reduction = "pca", dims = 1:30)
+```
+
+## Clustering
+
+```{r, eval = FALSE}
+ns_int_psu_noecc <- FindNeighbors(ns_int_psu_noecc, dims = 1:30, verbose = T)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.1, verbose = FALSE)
+#ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.15, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.2, verbose = FALSE)
+#ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.25, verbose = FALSE)
+#ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.3, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.4, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.6, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.8, verbose = FALSE)
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu_noecc")
+saveRDS(ns_int_psu_noecc, file="ns_int_psu_noecc.Rds") 
+```
+
+## UMAPS
+
+### By sample
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu_noecc/plots")
+png("ns_int_psu_noecc_labelby_sample.png", units = "in", height = 5, width = 8, res=300)
+DimPlot(ns_int_psu_noecc, reduction = "umap", group.by = "sample")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction = "umap", group.by = "sample")
+```
+
+### By dataset
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_labelby_dataset.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_noecc, reduction = "umap", group.by = "dataset")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction = "umap", group.by = "dataset")
+```
+
+### By subcell
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_labelby_subcell.png", units = "in", height = 5, width = 8, res=300)
+DimPlot(ns_int_psu_noecc, reduction = "umap", group.by = "subcell")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction = "umap", group.by = "subcell")
+```
+
+### By percent.mt
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_labelby_percentmt.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int_psu_noecc, features = "percent.mt")
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(ns_int_psu_noecc, features = "percent.mt")
+```
+
+### By nCount_RNA
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_labelby_nUMI.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int_psu_noecc, features = "nCount_RNA")
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(ns_int_psu_noecc, features = "nCount_RNA")
+```
+
+### By nFeature_RNA
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_labelby_nFeature.png", units = "in", height = 5, width = 5, res=300)
+FeaturePlot(ns_int_psu_noecc, features = "nFeature_RNA")
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(ns_int_psu_noecc, features = "nFeature_RNA")
+```
+
+### Highlight subcell types
+
+#### Choose subcell types to highlight
+
+```{r}
+#Idents(ns_int_psu) = "subcell"
+subcell_order = c("HF", "Inf_II", "Inf_III", "Inf_IV", "PS_Cyc", "Spn_IFN", "Keratinocyte", 
+"MDSC", "SG_I", "Multiplet", "Spn_I", "Inf_I", "Multi", "Cyc_I", 
+"IB", "Spn_II", "Basal_III", "Spn_III", "SB", "OB", "IRS", 
+"Cyc_III", "SG_II", "Bas_II", "Fibroblast", "N_Cyc", "Bas_I", 
+"Endothelial Cell")
+```
+
+```{r, eval = FALSE}
+Idents(ns_int_psu_noecc) = "subcell"
+cells_highlight = WhichCells(ns_int_psu_noecc, idents = subcell_order)
+png("ns_int_psu_noecc_labelby_subcell_noNA.png", units = "in", height = 5, width = 7, res=300)
+DimPlot(ns_int_psu_noecc, reduction = "umap",cells = cells_highlight)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(ns_int_psu_noecc) = "subcell"
+cells_highlight = WhichCells(ns_int_psu_noecc, idents = subcell_order)
+DimPlot(ns_int_psu_noecc, reduction = "umap", cells = cells_highlight)
+```
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_labelby_subcell_noNA_label.png", units = "in", height = 5, width = 7, res=300)
+DimPlot(ns_int_psu_noecc, reduction = "umap",cells = cells_highlight, label=T)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction = "umap", cells = cells_highlight, label=T)
+```
+
+### By cluster
+
+```{r, eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8)
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(ns_int_psu_noecc) = paste("integrated_snn_res.",res,sep="")
+  png(paste("ns_int_psu_noecc_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(ns_int_psu_noecc, reduction="umap", label=T, do.return = T, pt.size = 0.1)
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+Idents(ns_int_psu_noecc) = 'integrated_snn_res.0.4'
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T, do.return = T, pt.size = 0.1)
+```
+
+## Feature Plots
+
+```{r, eval = FALSE}
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD163","CD207",
+	"CD3E","MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1",
+	"KRT23","KRT25","KRT6A","KRT16","KRT17","PPARG","DIO2","COMP","FGF7","COL17A1","TP63","PTN","SAT1","SOX4","KLF5","TNC",
+	"PTHLH","MT1X","MT1G","MT1H","MT1E","SFRP1","DMKN","ZNF750","IVL","SOSTDC1","FGF18","IL37","IL1F10","IL36RN","IL1RN",
+	"MDK","LGALS1","CD151","ITGB1","MKI67","LUM","COL6A1","SOX2","DHRS9","LCE1E","PIP","LGR5","LGR6","ANGPTL7","BGN","MDK",
+	"KIF12","TSPAN18","MFAP2","CLDN10","FAM13A","ID1","ID3","KRT7","TMEM213","KRT75","TP63",
+	"SOX2","CORIN","PROM1","NRG2","CNTN1","STX17","PRDX5","CD34","CST6","MSX2","BARX2","IL11RA","FGF5",
+	"S100P","MMP7","KRT77","FZD10","PCDH19","DLX3","ANGPTL7","PARM1","KRT8","KRT18")
+
+#genes = "MT-CYB"
+genes_match = genes[genes %in% rownames(ns_int_psu_noecc)]
+DefaultAssay(ns_int_psu_noecc) = 'RNA'
+
+for (i in 1:length(genes_match))
+{
+  png(paste("ns_int_psu_noecc_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = ns_int_psu_noecc, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+## Find Markers
+
+```{r, eval = FALSE}
+Idents(ns_int_psu_noecc) = "integrated_snn_res.0.6"
+markers <- FindAllMarkers(ns_int_psu_noecc, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+write.table(markers.filt, file = "ns_int_psu_noecc_seurat_markers_res0.6.csv",sep = ",",row.names = T, col.names=T)
+```

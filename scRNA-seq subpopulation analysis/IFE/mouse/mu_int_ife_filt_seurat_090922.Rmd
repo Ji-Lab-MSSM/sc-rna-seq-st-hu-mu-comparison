@@ -1,0 +1,440 @@
+---
+title: "Filtering mouse IFE cells"
+author: "Larry Chen"
+date: "2023-01-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-load, include = FALSE}
+mu_int_ife_filt = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/mu_int_ife_filt.Rds")
+```
+
+## Load Object
+
+```{r, eval = FALSE}
+mu_int_ife = readRDS("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_ife_new/mu_int_ife.Rds") 
+Idents(mu_int_ife) = "integrated_snn_res.0.6"
+```
+
+## Subset Object to remove contaminating non IFE cells
+
+```{r, eval = FALSE}
+mu_int_ife_filt = subset(mu_int_ife, idents = c(0,1,3,4,5,6,9,10,11,12,15)) # exclude 2,7,8,13,14
+DefaultAssay(mu_int_ife_filt) = "RNA"
+dim(mu_int_ife_filt)
+```
+
+## Preprocessing
+
+```{r, eval = FALSE}
+mu.list <- SplitObject(mu_int_ife_filt, split.by = "orig.ident")
+
+# Only non-wounded normal skin
+#mu.list <- mu.list[c("uw1", "uw2", "5w", "5wk1","5wk2","5wk3","9w","9wk1","9wk2")]
+for (i in 1:length(mu.list)) {
+    mu.list[[i]] <- NormalizeData(mu.list[[i]], verbose = FALSE)
+    mu.list[[i]] <- FindVariableFeatures(mu.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+    print(i)
+}
+```
+
+## Integrate
+
+```{r, eval = FALSE}
+reference.list <- mu.list
+mu.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+
+mu_int_ife_filt <- IntegrateData(anchorset = mu.anchors, dims = 1:30)
+print(dim(mu_int_ife_filt))
+```
+
+## Scale/PCA/UMAP
+
+```{r, eval = FALSE}
+DefaultAssay(mu_int_ife_filt) <- "integrated"
+mu_int_ife_filt <- ScaleData(mu_int_ife_filt, verbose = FALSE)
+mu_int_ife_filt <- RunPCA(mu_int_ife_filt, npcs = 30, verbose = FALSE)
+mu_int_ife_filt <- RunUMAP(mu_int_ife_filt, reduction = "pca", dims = 1:30)
+```
+
+## DimPlot by sample
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_ife_new/mu_int_ife_filt/plots")
+
+png("mu_int_ife_filt_labelbysample.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(mu_int_ife_filt, reduction = "umap", group.by = "orig.ident")
+print(p1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_ife_filt, reduction = "umap", group.by = "orig.ident")
+```
+
+## Add Joost annotations
+
+```{r, eval = FALSE}
+# Add Joost annotations
+mu_int_metadata = read.table("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_metadata.txt",sep="\t",
+  row.names=1,header=T,stringsAsFactors = F)
+mu_int_ife_filt$sj_anno_nomu = mu_int_metadata[colnames(mu_int_ife_filt),"sj_anno_nomu"]
+```
+
+```{r, eval = FALSE}
+png("mu_int_ife_filt_labelby_sj_anno_nomu.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(mu_int_ife_filt, reduction = "umap", group.by = "sj_anno_nomu")
+print(p1)
+dev.off()
+png("mu_int_ife_filt_labelby_sj_anno_nomu_label.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(mu_int_ife_filt, label=T, reduction = "umap", group.by = "sj_anno_nomu")
+print(p1)
+dev.off()
+```
+
+## Clustering
+
+```{r, eval = FALSE}
+mu_int_ife_filt <- FindNeighbors(mu_int_ife_filt, dims = 1:30, verbose = T)
+mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 0.1, verbose = FALSE)
+#mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 0.15, verbose = FALSE)
+mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 0.2, verbose = FALSE)
+#mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 0.25, verbose = FALSE)
+#mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 0.3, verbose = FALSE)
+mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 0.4, verbose = FALSE)
+mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 0.6, verbose = FALSE)
+mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 0.8, verbose = FALSE)
+mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 1, verbose = FALSE)
+mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 1.2, verbose = FALSE)
+mu_int_ife_filt <- FindClusters(mu_int_ife_filt, resolution = 1.5, verbose = FALSE)
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_ife_new/mu_int_ife_filt")
+saveRDS(mu_int_ife_filt, file="mu_int_ife_filt.Rds") 
+```
+
+## Graphing
+
+### UMAPs
+
+#### By Sample
+
+```{r, eval = FALSE}
+png("mu_int_ife_filt_labelby_sample.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_ife_filt, reduction="umap", do.label=F, group.by = "orig.ident", do.return = T, pt.size = 0.25)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_ife_filt, reduction="umap", label = F, group.by = "orig.ident", pt.size = 0.25)
+```
+
+#### By clusters (\@ diff res)
+
+```{r, eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8,1,1.2,1.5)
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(mu_int_ife_filt) = paste("integrated_snn_res.",res,sep="")
+  png(paste("mu_int_ife_filt_res_",res,".png",sep=""), units = "in", height = 5, width = 6, res=300)
+  p=DimPlot(mu_int_ife_filt, reduction="umap", label=T, do.return = T, pt.size = 0.25)
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+Idents(mu_int_ife_filt) = 'integrated_snn_res.0.4'
+DimPlot(mu_int_ife_filt, reduction="umap", label=T, pt.size = 0.25)
+```
+
+#### By NCountRNA
+
+```{r, eval = FALSE}
+png("mu_int_ife_filt_nUMI.png", units = "in", height = 5, width = 5.5, res=300)
+p=FeaturePlot(object = mu_int_ife_filt, features = "nCount_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+p = p + NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(object = mu_int_ife_filt, features = "nCount_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+```
+
+#### By nFeature_RNA
+
+```{r, eval = FALSE}
+png("mu_int_ife_filt_nFeature.png", units = "in", height = 5, width = 5.5, res=300)
+p=FeaturePlot(object = mu_int_ife_filt, features = "nFeature_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+p = p + NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(object = mu_int_ife_filt, features = "nFeature_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+```
+
+## Feature Plots
+
+```{r, eval = FALSE}
+DefaultAssay(mu_int_ife_filt) = "RNA"
+
+genes = c("Krt14", "Krt5", "Krt1", "Krt10", "Lhx2", "Krt19", 
+"Azgp1", "Krt15", "Sox9", "Cd14", "Cd207", "Cd3e", "Mlana", "Vwf", 
+"Col1a1", "S100a8", "S100a9", "Clec9a", "Mgst1", "Apoe", 
+"Xcl1", "Mki67", "Ccr7", "Ccl19", "Sele", "Dio2", "Wif1", "Krt15", 
+"Col17a1", "Flg", "Lor","Cd34", "Itga6", "Col17a1", "Itgb1", "Itgb4", 
+"Barx2", "Msx2", "Krt25", "Krt27", "Krt71", "Krt79", "Pthlh", 
+"Lgr5", "Lgr6", "Cst6", "Fgf5", "Krt31", 
+"Sfrp1", "Edn2", "Tagln",
+"Ptn","Sostdc1","Dkk3","Tnc","Sfrp2","Lamb3","Trp63","Klk7","Ivl","Lce1a1")
+
+genes_match = genes[genes %in% rownames(mu_int_ife_filt)]
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_ife_new/mu_int_ife_filt/plots")
+
+genes = c("Col17a1","Mki67","Klk7","Krt10","Itga6","Krt1","Zfp750","Ivl","Itgb4","Itgb1")
+genes_match = genes[genes %in% rownames(mu_int_ife_filt)]
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_ife_new/mu_int_ife_filt/plots")
+```
+
+```{r, eval = FALSE}
+for (i in 1:length(genes_match))
+{
+  png(paste("mu_int_ife_filt_",genes_match[i],"_noaxes_nolegend_pt1_RNA_nolegend.png",sep=""), units = "in", height = 5, width = 5, res=300)
+  p=FeaturePlot(object = mu_int_ife_filt, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 1, order=T)
+  p = p + NoAxes() + NoLegend()
+  print(p)
+  dev.off()
+}
+```
+
+```{r, eval = FALSE}
+png("mu_int_ife_filt_labelby_ccphase_2d.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(mu_int_ife_filt, reduction = "umap", group.by = "Phase")
+print(p1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_ife_filt, reduction = "umap", group.by = "Phase")
+```
+
+```{r, eval = FALSE}
+genes_match = c("S.Score","G2M.Score")
+for (i in 1:length(genes_match))
+{
+  png(paste("mu_int_ife_filt_",genes_match[i],"_noaxes_nolegend_pt0.25_RNA.png",sep=""), units = "in", height = 5, width = 5, res=300)
+  p=FeaturePlot(object = mu_int_ife_filt, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+## Cell Cycle Scoring
+
+```{r, eval = FALSE}
+# Cell cycle scoring
+DefaultAssay(mu_int_ife_filt) = "RNA"
+
+mu_cc_genes = readRDS("/scratch/groups/khavari/users/andrewji/mu_all/mouse_cell_cycle_genes.rds")
+
+s.genes <- mu_cc_genes$s.genes
+g2m.genes <- mu_cc_genes$g2m.genes
+mu_int_ife_filt <- CellCycleScoring(mu_int_ife_filt, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+```
+
+### UMAP by Cell Cycle Scores
+
+```{r, eval = FALSE}
+cols = c("palevioletred","goldenrod","turquoise3")
+Idents(mu_int_ife_filt) = "Phase"
+p = DimPlot(mu_int_ife_filt, pt.size = 0.25, cols = cols)
+p = p + NoLegend() + NoAxes()
+png("mu_int_ife_filt_cc_phase_newcols_nolegend.png", units = "in", height = 5, width = 5, res=300)
+print(p)
+dev.off()
+```
+
+## Find all markers
+
+```{r, eval = FALSE}
+Idents(mu_int_ife_filt) = "integrated_snn_res.0.4"
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_ife_new/mu_int_ife_filt")
+markers <- FindAllMarkers(mu_int_ife_filt, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+write.table(markers.filt, file = "mu_int_ife_filt_seurat_markers_res0.4.csv",sep = ",",row.names = T, col.names=T)
+```
+
+## Save Metadata
+
+```{r, eval = FALSE}
+mu_int_ife_filt_metadata = as.matrix(mu_int_ife_filt@meta.data)
+write.table(mu_int_ife_filt_metadata,file="mu_int_ife_filt_metadata.txt",sep="\t",col.names=T,row.names=T)
+```
+
+### extra graphs
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_ife_new/mu_int_ife_filt/plots")
+
+res = 0.4
+Idents(mu_int_ife_filt) = "integrated_snn_res.0.4"
+png(paste("mu_int_ife_filt_res_",res,"_nolabel.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_ife_filt, reduction="umap", label=F, pt.size = 0.25)
+print(p)
+dev.off()
+png(paste("mu_int_ife_filt_res_",res,"_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_ife_filt, reduction="umap", label=T, pt.size = 0.25)
+print(p)
+dev.off()
+png(paste("mu_int_ife_filt_res_",res,"_nolabel_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_ife_filt, reduction="umap", label=F, pt.size = 0.25)
+print(p)
+dev.off()
+png(paste("mu_int_ife_filt_res_",res,"_noaxes_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_ife_filt, reduction="umap", label=T, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+png(paste("mu_int_ife_filt_res_",res,"_noaxes_nolabel_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_ife_filt, reduction="umap", label=F, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+png(paste("mu_int_ife_filt_res_",res,"_noaxes_color_order_largelabel.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_ife_filt, reduction="umap", label=T,label.size = 8, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+## Dot Plots
+
+```{r, include = FALSE}
+Idents(mu_int_ife_filt) = "integrated_snn_res.0.4"
+markers <- FindAllMarkers(mu_int_ife_filt, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+mu_ife_markers = subset(markers, p_val_adj < 0.05)
+mu_ife_markers_top10 = mu_ife_markers %>% group_by(cluster) %>% top_n(10, avg_logFC) 
+```
+
+```{r, eval = FALSE}
+###
+# Dot plots
+
+mu_ife_markers = read.table("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_ife_new/mu_int_ife_filt/mu_int_ife_filt_seurat_markers_res0.4.csv", sep=",",stringsAsFactors=F,header=T,row.names=1)                   
+mu_ife_markers_top10 = mu_ife_markers %>% group_by(cluster) %>% top_n(10, avg_logFC) 
+```
+
+```{r}
+mu_top10_unique = unique(mu_ife_markers_top10$gene)
+order_clus = c(0,1,4,9,5,7,6,2,3,8)
+mu_top10_reorder = mu_top10_unique[c(1:20,38:47,78:86,48:57,68:74,58:67,21:37,75:77)]
+Idents(mu_int_ife_filt) = "integrated_snn_res.0.4"
+Idents(mu_int_ife_filt) = factor(x = Idents(mu_int_ife_filt), levels = order_clus)
+```
+
+```{r, eval = FALSE}
+library(ggplot2)
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_ordered_vert.pdf",height = 7, width = 16,useDingbats=F)
+p = DotPlot(mu_int_ife_filt, features = rev(mu_top10_reorder))
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(p)
+dev.off()
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_ordered.pdf",height = 5, width = 16,useDingbats=F)
+p = DotPlot(mu_int_ife_filt, features = mu_top10_reorder)
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(p)
+dev.off()
+Idents(mu_int_ife_filt) = factor(x = Idents(mu_int_ife_filt), levels = rev(order_clus))
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_rev_ordered.pdf",height = 5, width = 16,useDingbats=F)
+p = DotPlot(mu_int_ife_filt, features = rev(mu_top10_reorder))
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(p)
+dev.off()
+
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_ordered.pdf",height = 5, width = 16,useDingbats=F)
+p = DotPlot(mu_int_ife_filt, features = mu_top10_reorder)
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(p)
+dev.off()
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_ordered_rtaxis.pdf",height = 5, width = 16,useDingbats=F)
+p = DotPlot(mu_int_ife_filt, features = mu_top10_reorder)
+p = p + RotatedAxis()
+print(p)
+dev.off()
+
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot.pdf",height = 5, width = 16)
+p = DotPlot(mu_int_ife_filt, features = mu_top10_unique)
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(p)
+dev.off()
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_rtaxis.pdf",height = 5, width = 16)
+p = DotPlot(mu_int_ife_filt, features = mu_top10_unique)
+p = p + RotatedAxis()
+print(p)
+dev.off()
+
+```
+
+```{r, eval = FALSE}
+mu_int_ife_filt_sub = subset(mu_int_ife_filt,idents = c(0:6,8:12))
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_subset.pdf",height = 5, width = 19, useDingbats=F)
+p = DotPlot(mu_int_ife_filt_sub, features = rev(mu_top10_unique[c(1:67,78:121)]))
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(p)
+dev.off()
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_subset_45.pdf",height = 4, width = 22,  useDingbats=F)
+p = DotPlot(mu_int_ife_filt_sub, features = rev(mu_top10_unique[c(1:67,78:121)])) + RotatedAxis()
+print(p)
+dev.off()
+
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_subset_Rdbu.pdf",height = 5, width = 19,  useDingbats=F)
+p = DotPlot(mu_int_ife_filt_sub, features = rev(mu_top10_unique[c(1:67,78:121)]), cols = "RdBu")
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+print(p)
+dev.off()
+pdf("mu_int_ife_filt_res_0.4_marker_dotplot_subset_45_Rdbu.pdf",height = 4, width = 22,  useDingbats=F)
+p = DotPlot(mu_int_ife_filt_sub, features = rev(mu_top10_unique[c(1:67,78:121)]),  cols = "RdBu") + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(mu_int_ife_filt, features = mu_top10_reorder)
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p
+```

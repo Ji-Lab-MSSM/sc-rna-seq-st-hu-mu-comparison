@@ -1,0 +1,688 @@
+---
+title: "Isolating Cycling Cells in Mice and Calculating Proportions"
+author: "Larry Chen"
+date: "2022-10-24"
+output:
+  html_document: default
+---
+
+This R Markdown file will take you through the process of isolating cycling IFE cells in mice, calculating the proportion of overall cycling cells, and calculating proportion of basal/spinous cells that are cycling.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r, message = FALSE}
+library(Seurat)
+library(SeuratObject)
+library(patchwork)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(tibble)
+library(details)
+```
+
+```{r}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+# Importing data into R from GEO files
+
+The original CellRanger data was downloaded from the NCBI GEO database. Note: the data from the SHP samples were not used in this analysis. (Accession \# GSE165021 <https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE165021>)
+
+Keep the barcodes, features, and matrix files for each sample in a separate folder, and place each sample folder into a directory of your choice. Enter the directory path into the "data_dir" variable.
+
+```{r include = FALSE}
+psor_int_filt = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_int_filt.Rds')
+psor_ife = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife.Rds')
+psor_ifeish = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ifeish.Rds')
+psor_ife_cyclish = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyclish/psor_ife_cyclish.Rds')
+psor_ife_cyc_int = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyc_int/psor_ife_cyc_int.Rds')
+psor_ife_cyc_int_metadata = read.table("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyc_int/psor_ife_cyc_int_metadata.txt")
+```
+
+```{r eval = FALSE}
+#SET FOLDER NAMES (geo_names)
+geo_names = c("GSM5024746-Normal_1","GSM5024747-Normal_2","GSM5024748-IMQ_1","GSM5024749-IMQ_2") 
+all_data = list()
+#import data
+for (i in 1:length(geo_names))
+{
+  data_dir = paste("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/",geo_names[i],sep="")
+  list.files(data_dir)
+  data = Read10X(data.dir = data_dir)
+  all_data[[i]] = data
+}
+allnames = c("Normal_1","Normal_2","IMQ_1","IMQ_2") #assign names for objects
+all_obj = list()
+```
+
+# INITIAL PREPROCESSING
+
+## Creating Seurat Objects for each sample
+
+```{r eval = FALSE}
+#create objects 
+for (i in 1:length(all_data))
+{
+  obj <- CreateSeuratObject(counts = all_data[[i]], project = allnames[i])
+  obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern = "^mt-")
+  obj = subset(obj, percent.mt < 10 & nFeature_RNA>=200)
+  all_obj[[i]] = obj
+}
+
+for (i in 1:length(all_obj)) {
+  all_obj[[i]] <- NormalizeData(all_obj[[i]], verbose = FALSE)
+  all_obj[[i]] <- FindVariableFeatures(all_obj[[i]], selection.method = "vst", 
+                                       nfeatures = 2000, verbose = FALSE)
+}
+reference.list <- all_obj
+```
+
+## Integrating Seurat Objects
+
+```{r eval = FALSE}
+#find integration anchors (LONG STEP)
+int.anchors = FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+#integrate data (LONG-ISH STEP)
+psor_int_filt <- IntegrateData(anchorset = int.anchors, dims = 1:30)
+DefaultAssay(psor_int_filt) <- "integrated"
+```
+
+## Seurat Data Processing
+
+```{r eval = FALSE}
+psor_int_filt <- ScaleData(psor_int_filt, verbose = FALSE)
+psor_int_filt <- RunPCA(psor_int_filt, npcs = 30, verbose = FALSE)
+psor_int_filt <- RunUMAP(psor_int_filt, reduction = "pca", dims = 1:30)
+```
+
+## Clustering
+
+Clusters are generated at resolutions 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, and 1.2 to help with isolating cells.
+
+```{r eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+psor_int_filt <- FindNeighbors(psor_int_filt, dims = 1:30, verbose = T)
+
+for (i in all_res){
+  psor_int_filt <- FindClusters(psor_int_filt, resolution = i, verbose = FALSE)
+}
+```
+
+## Generating UMAPs, Feature Plots, and Marker Lists
+
+These tools were used to identify clusters. UMAPs, Feature Plots, and Marker Lists are generated for every cluster resolution.
+
+### UMAPS
+
+```{r eval = FALSE}
+#Generating and Saving UMAPs
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt')
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(psor_int_filt) = paste("integrated_snn_res.",res,sep="")
+  png(paste("psor_int_filt_UMAP",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(psor_int_filt, reduction="umap", label=T, pt.size = 1)
+  print(p)
+  dev.off()
+}
+```
+
+### Feature Plots
+
+```{r eval = FALSE}
+#Generating and Saving Feature Plots
+DefaultAssay(psor_int_filt) = "RNA"
+genes = list(c("Krt10",'Col17a1'),c("Lor",'Flg','Ivl','Klk7'),c("Mki67",'Pcna','Top2a'), c("Itga6", "Itgb4", "Itgb1", "Krt14", "Krt5",'Col17a1'), c("Krt79","Epcam", "Sox9"))
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt')
+for (i in 1:length(genes))
+{
+  png(paste("psor_int_filt_",paste(genes[[i]], collapse = '.'),"_noaxes_nolegend.png", sep=""), units = "in", height = 6, width = 10, res=300)
+  p= FeaturePlot(object = psor_int_filt, features = genes[[i]], cols = c("lightgrey", "blue"), pt.size = 1)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+### Marker Lists
+
+```{r eval = FALSE}
+for (i in all_res){
+  Idents(psor_int_filt) = paste("integrated_snn_res.", i, sep = '')
+  psor_int_filt.markers = FindAllMarkers(psor_int_filt, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  write.csv(psor_int_filt.markers, paste0("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_int_filt.markers_",i,".csv"))
+}
+```
+
+# IDENTIFYING IFE-ISH CELLS
+
+Using the feature maps and marker lists, we identified clusters 1,5,6,7,8 and 17 at resolution 0.4 as containing IFE cells.
+
+```{r}
+Idents(psor_int_filt) = "integrated_snn_res.0.4"
+DimPlot(psor_int_filt, reduction="umap", label=T, pt.size = 1)
+```
+
+However, we recognized that these clusters likely had contaminating non-IFE cells. This is evidenced by the presence of cells positive for Cd34, a outer bulge/hair follicle marker.
+
+```{r}
+DefaultAssay(psor_int_filt) = "RNA"
+FeaturePlot(object = psor_int_filt, features = "Cd34", cols = c("lightgrey", "blue"), pt.size = 1)
+```
+
+The next step involves subsetting these 'IFE-ish' cells and reclustering them, in order to remove any contaminating non-IFE cells.
+
+```{r eval = FALSE}
+Idents(psor_int_filt) = "integrated_snn_res.0.4" 
+psor_ifeish_no_int = subset(psor_int_filt, idents = c(1,5,6,7,8,17))
+```
+
+## Integrating IFE-ish subsets
+
+```{r eval = FALSE}
+#reintegration
+all_obj <- SplitObject(psor_ifeish_no_int, split.by = "orig.ident")
+for (i in 1:length(all_obj)){
+  all_obj[[i]] <- NormalizeData(all_obj[[i]], verbose = FALSE)
+  all_obj[[i]] <- FindVariableFeatures(all_obj[[i]], selection.method = "vst", 
+                                           nfeatures = 2000, verbose = FALSE)
+}
+reference.list <- all_obj
+#find integration anchors (LONG)
+int.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+#integrate data (LONG-ISH)
+psor_ifeish <- IntegrateData(anchorset = int.anchors, dims = 1:30)
+DefaultAssay(psor_ifeish) <- "integrated"
+dim(psor_ifeish)
+```
+
+## Preprocessing
+
+```{r eval = FALSE}
+psor_ifeish <- ScaleData(psor_ifeish, verbose = FALSE)
+psor_ifeish <- RunPCA(psor_ifeish, npcs = 30, verbose = FALSE)
+psor_ifeish <- RunUMAP(psor_ifeish, reduction = "pca", dims = 1:30)
+```
+
+## Reclustering
+
+```{r eval = FALSE}
+psor_ifeish <- FindNeighbors(psor_ifeish, dims = 1:30, verbose = T)
+for (i in all_res){
+  psor_ifeish <- FindClusters(psor_ifeish, resolution = i, verbose = FALSE)
+}
+```
+
+## UMAPs, Feature Plots, and Marker Lists
+
+### UMAPS
+
+```{r eval = FALSE}
+#umaps
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish')
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(psor_ifeish) = paste("integrated_snn_res.",res,sep="")
+  png(paste("psor_ifeish_UMAP",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(psor_ifeish, reduction="umap", label=T, pt.size = 1)
+  print(p)
+  dev.off()
+}
+```
+
+### Feature Plots
+
+```{r eval = FALSE}
+#feature plots
+DefaultAssay(psor_ifeish) = "RNA"
+genes = list(c("Krt10",'Col17a1'),c("Lor",'Flg','Ivl','Klk7'),c("Mki67",'Pcna','Top2a'), c("Itga6", "Itgb4", "Itgb1", "Krt14", "Krt5",'Col17a1'), c("Krt79","Epcam", "Sox9"))
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish')
+for (i in 1:length(genes))
+{
+  png(paste("psor_ifeish_",paste(genes[[i]], collapse = '.'),"_noaxes_nolegend.png", sep=""), units = "in", height = 6, width = 10, res=300)
+  p= FeaturePlot(object = psor_ifeish, features = genes[[i]], cols = c("lightgrey", "blue"), pt.size = 1)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+### Marker Lists
+
+```{r eval = FALSE}
+#SAVING MARKER LISTS
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+for (i in all_res){
+  Idents(psor_ifeish) = paste("integrated_snn_res.", i, sep = '')
+  psor_ifeish.markers = FindAllMarkers(psor_ifeish, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  write.csv(psor_ifeish.markers, paste0("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ifeish.markers_",i,".csv"))
+}
+```
+
+# IDENTIFYING IFE CELLS FROM IFE-ISH
+
+At clustering resolution 0.4, we identified clusters 0,1,2,3,4 as IFE cells, and the rest of the clusters as hair follicle/outer bulge/inner root sheathe cells (5,6,7,12), sebaceous gland cells (9), fibroblasts (8), or immune cells (10,11).
+
+```{r}
+Idents(psor_ifeish) = "integrated_snn_res.0.4"
+DimPlot(psor_ifeish, reduction="umap", label=T, pt.size = 1)
+```
+
+```{r}
+DefaultAssay(psor_ifeish) = "RNA"
+FeaturePlot(object = psor_ifeish, features = c("Lhx2","Fst","Krt79","Dcn"), cols = c("lightgrey", "blue"), pt.size = 1)
+```
+
+We then took clusters 0,1,2,3,4 as the true IFE cells, and reclustered them, in order to identify basal, spinous, and cycling IFE cells.
+
+## Isolating IFE clusters
+
+```{r eval = FALSE}
+Idents(psor_ifeish) = "integrated_snn_res.0.4" 
+psor_ife_no_int = subset(psor_ifeish, idents = c(0,1,2,3,4))
+for (i in 1:length(all_obj)){
+  all_obj[[i]] <- NormalizeData(all_obj[[i]], verbose = FALSE)
+  all_obj[[i]] <- FindVariableFeatures(all_obj[[i]], selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+}
+```
+
+## Reintegration
+
+```{r eval = FALSE}
+reference.list <- all_obj
+#find integration anchors (LONG)
+int.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+#integrate data (LONG-ISH)
+psor_ife <- IntegrateData(anchorset = int.anchors, dims = 1:30)
+DefaultAssay(psor_ife) <- "integrated"
+dim(psor_ife)
+```
+
+## Preprocessing
+
+In this round of clustering, we also calculate cell cycle scores, to help us identify clusters that consist of mostly cycling cells.
+
+```{r eval = FALSE}
+psor_ife <- ScaleData(psor_ife, verbose = FALSE)
+psor_ife <- RunPCA(psor_ife, npcs = 30, verbose = FALSE)
+psor_ife <- RunUMAP(psor_ife, reduction = "pca", dims = 1:30)
+```
+
+## Calculating Cell Cycle Scores
+
+#### Importing list of murine cell cycle genes
+
+```{r}
+mu_s.genes = c("Mcm4", "Exo1", "Slbp", "Gmnn", "Cdc45", "Msh2", "Mcm6", "Rrm2", "Pold3", "Blm", 
+               "Ubr7", "Mcm5", "Clspn", "Hells", "Nasp", "Rpa2", "Rad51ap1", "Tyms", "Rrm1", "Rfc2", 
+               "Prim1", "Brip1", "Usp1", "Ung",  "Pola1", "Mcm2", "Fen1", "Tipin", "Pcna", "Cdca7",
+               "Uhrf1", "Casp8ap2", "Cdc6", "Dscc1", "Wdr76", "E2f8", "Dtl", "Ccne2", "Atad2", "Gins2", 
+               "Chaf1b", "Pcna-ps2")
+mu_g2m.genes = c("Nuf2", "Psrc1", "Ncapd2", "Ccnb2", "Smc4", "Lbr", "Tacc3", "Cenpa", "Kif23", "Cdca2", "Anp32e", 
+                 "G2e3", "Cdca3", "Anln", "Cenpe", "Gas2l3", "Tubb4b", "Cenpf", "Dlgap5", "Hjurp", "Cks1brt", "Gtse1", 
+                 "Bub1", "Birc5", "Ube2c", "Rangap1", "Hmmr", "Ect2", "Tpx2", "Ckap5", "Cbx5", "Nek2", "Ttk", 
+                 "Cdca8", "Nusap1", "Ctcf", "Cdc20", "Cks2", "Mki67", "Tmpo", "Ckap2l", "Aurkb", "Kif2c", "Cdk1", 
+                 "Kif20b", "Top2a", "Aurka", "Ckap2", "Hmgb2", "Cdc25c", "Ndc80", "Kif11")
+```
+
+#### CellCycleScoring()
+
+```{r}
+DefaultAssay(psor_ife) = 'RNA'
+psor_ife <- CellCycleScoring(psor_ife, s.features = mu_s.genes, g2m.features = mu_g2m.genes, set.ident = TRUE)
+```
+
+## Clustering
+
+```{r eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+psor_ife <- FindNeighbors(psor_ife, dims = 1:30, verbose = T)
+
+for (i in all_res){
+  psor_ife <- FindClusters(psor_ife, resolution = i, verbose = FALSE)
+}
+```
+
+## UMAPs, Feature plots, and Marker Lists
+
+### UMAPs
+
+```{r eval = FALSE}
+#umaps
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife')
+for (i in 1:length(all_res)){
+  res = all_res[i]
+  Idents(psor_ife) = paste("integrated_snn_res.",res,sep="")
+  png(paste("psor_ife_UMAP",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(psor_ife, reduction="umap", label=T, pt.size = 1)
+  print(p)
+  dev.off()
+}
+```
+
+### Feature Plots
+
+```{r eval = FALSE}
+DefaultAssay(psor_ife) = "RNA"
+genes = list(c("Krt10",'Col17a1'),c("Lor",'Flg','Ivl','Klk7'),c("Mki67",'Pcna','Top2a'), c("Itga6", "Itgb4", "Itgb1", "Krt14", "Krt5",'Col17a1'), c("Krt79","Epcam", "Sox9"))
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife')
+for (i in 1:length(genes)){
+  png(paste("psor_ife_",paste(genes[[i]], collapse = '.'),"_noaxes_nolegend.png", sep=""), units = "in", height = 6, width = 10, res=300)
+  p= FeaturePlot(object = psor_ife, features = genes[[i]], cols = c("lightgrey", "blue"), pt.size = 1)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+### Marker Lists
+
+```{r eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+for (i in all_res){
+  Idents(psor_ife) = paste("integrated_snn_res.", i, sep = '')
+  psor_ife.markers = FindAllMarkers(psor_ife, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  write.csv(psor_ife.markers, paste0("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife.markers_",i,".csv"))
+}
+```
+
+### Plotting Cell Cycle Scores
+
+Based on cell cycle scores, Seurat will classify a cell as either in G1, S, or G2M phase. For every cluster, we calculate the proportion of cells in each phase and graph the results. This can be a useful tool for confirming the identity of cycling cell clusters.
+
+```{r}
+#plotting cellcycle score per cluster, for every clustering resolution
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+for (i in all_res){
+  #set obj_name
+  obj_name = "psor_ife"
+  #set identity to i from all_res
+  ident = paste0("integrated_snn_res.", i)
+  #pull cluster numbers
+  clusters = unique(eval(parse(text = paste0(obj_name,"$", ident))))
+  #create list to store lists of cell cycle score counts
+  cell_cycle_scores = list()
+  #iterate through each cluster, calculating how many cells are marked in each phase
+  for (c in clusters){
+    expr = FetchData(object = eval(parse(text = obj_name)), vars = ident)
+    iso_cluster = eval(parse(text = obj_name))[,which(x = expr == c)]
+    cluster_S_count = ifelse("S" %in% unique(iso_cluster$Phase),length(WhichCells(iso_cluster, expression = Phase == "S")), 0)
+    cluster_G1_count = ifelse("G1" %in% unique(iso_cluster$Phase),length(WhichCells(iso_cluster, expression = Phase == "G1")), 0)
+    cluster_G2M_count = ifelse("G2M" %in% unique(iso_cluster$Phase),length(WhichCells(iso_cluster, expression = Phase == "G2M")),0)
+    cell_cycle_scores = append(cell_cycle_scores, list(c(cluster_S_count, cluster_G1_count, cluster_G2M_count)))
+  }
+  #transpose results and format as dataframe w/ col and row names
+  cell_cycle_scores_df = as.data.frame(t(as.data.frame(cell_cycle_scores)))
+  colnames(cell_cycle_scores_df) = c("S","G1","G2M")
+  rownames(cell_cycle_scores_df) = clusters
+  #convert raw counts into proportions
+  cell_cycle_proportions_df = cell_cycle_scores_df
+  #note: when creating a new dataframe to store proportions, need to transpose 
+  cell_cycle_proportions_df <- as.data.frame(t(apply(cell_cycle_proportions_df, 1, function(i) i/sum(i))))
+  cell_cycle_proportions_df = rownames_to_column(cell_cycle_proportions_df, "cluster")
+  cell_cycle_proportions_df$S_G2M = cell_cycle_proportions_df$S + cell_cycle_proportions_df$G2M
+  #create melted dataframe in preparation for ggplot
+  cell_cycle_proportions_dfm <- melt(cell_cycle_proportions_df[,c('cluster','S','G1',"G2M","S_G2M")],id.vars = 1)
+  
+  #plot and save
+  setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife")
+  png(paste(obj_name,"_prop_",i,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p = ggplot(cell_cycle_proportions_dfm,aes(x = cluster,y = value)) +
+    geom_bar(aes(fill = variable),stat = "identity",position = "dodge") + xlab("Cluster") + ylab("Proportion") + ggtitle(paste0(obj_name, " cell cycle proportions, res: ", i )) 
+  print(p)
+  dev.off()
+}
+```
+
+```{r}
+ggplot(cell_cycle_proportions_dfm,aes(x = cluster,y = value)) +
+    geom_bar(aes(fill = variable),stat = "identity",position = "dodge") + xlab("Cluster") + ylab("Proportion") + ggtitle(paste0(obj_name, " cell cycle proportions, res: ", i )) 
+```
+
+# IDENTIFYING CYCLING CELLS FROM IFE
+
+At clustering resolution 0.4, we identified cluster 4 as containing cycling cells.
+
+```{r}
+Idents(psor_ife) = "integrated_snn_res.0.4"
+DimPlot(psor_ife, reduction="umap", label=T, pt.size = 1)
+```
+
+```{r}
+FeaturePlot(object = psor_ife, features = c('Mki67','Pcna','Top2a'), cols = c("lightgrey", "blue"), pt.size = 1)
+```
+
+We subsetted this group of "cycling" cells, regressed out cell cycle scores, and reclustered them to distinguish between basal and spinous cycling cells.
+
+## Subsetting
+
+```{r}
+Idents(psor_ife) = "integrated_snn_res.0.4"
+DefaultAssay(psor_ife) = "RNA"
+psor_ife_cyc = subset(psor_ife, idents = 4)
+```
+
+## Integration
+
+```{r message = FALSE}
+hu.list <- SplitObject(psor_ife_cyc, split.by = "orig.ident")
+# Normalize all objects
+for (i in 1:length(hu.list)) {
+  hu.list[[i]] <- NormalizeData(hu.list[[i]], verbose = FALSE)
+  hu.list[[i]] <- FindVariableFeatures(hu.list[[i]], selection.method = "vst", 
+                                       nfeatures = 2000, verbose = FALSE)
+  print(i)
+}
+hu.anchors <- FindIntegrationAnchors(object.list = hu.list, dims = 1:30)
+
+psor_ife_cyc_int <- IntegrateData(anchorset = hu.anchors, dims = 1:30)
+DefaultAssay(psor_ife_cyc_int) <- "integrated"
+```
+
+## Preprocessing
+
+```{r message = FALSE}
+psor_ife_cyc_int <- ScaleData(psor_ife_cyc_int, verbose = FALSE, vars.to.regress = c("S.Score","G2M.Score","percent.mt","nFeature_RNA"))  # Tried only S.Score and G2M.Score and results look very similar
+psor_ife_cyc_int <- RunPCA(psor_ife_cyc_int, npcs = 30, verbose = FALSE)
+psor_ife_cyc_int <- RunUMAP(psor_ife_cyc_int, reduction = "pca", dims = 1:30)
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyc_int")
+png("psor_ife_cyc_int_labelbyorigident.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(psor_ife_cyc_int, reduction = "umap", group.by = "orig.ident")
+print(p1)
+dev.off()
+```
+
+## Clustering
+
+```{r}
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+psor_ife_cyc_int <- FindNeighbors(psor_ife_cyc_int, dims = 1:30, verbose = T)
+
+for (i in all_res){
+  psor_ife_cyc_int <- FindClusters(psor_ife_cyc_int, resolution = i, verbose = FALSE)
+}
+```
+
+```{r}
+FeaturePlot(psor_ife_cyc_int,features = c("Col17a1","Krt1","S.Score","G2M.Score","percent.mt","nFeature_RNA")) 
+```
+
+```{r}
+psor_ife_cyc_int
+```
+
+## UMAPs, Feature plots, and Marker Lists
+
+### UMAPS
+
+```{r}
+#umaps
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyc_int')
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+for (i in 1:length(all_res)){
+  res = all_res[i]
+  Idents(psor_ife_cyc_int) = paste("integrated_snn_res.",res,sep="")
+  png(paste("psor_ife_cyc_int_UMAP",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(psor_ife_cyc_int, reduction="umap", label=T, pt.size = 1)
+  print(p)
+  dev.off()
+}
+```
+
+### Feature Plots
+
+```{r message = FALSE}
+#feature plots
+DefaultAssay(psor_ife_cyc_int) = "RNA"
+genes = list(c("Krt10",'Col17a1'),c("Lor",'Flg','Ivl','Klk7'),c("Mki67",'Pcna','Top2a'), c("Itga6", "Itgb4", "Itgb1", "Krt14", "Krt5",'Col17a1'), c("Krt79","Epcam", "Sox9"))
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyc_int')
+for (i in 1:length(genes)){
+  png(paste("psor_ife_cyc_int", paste(genes[[i]], collapse = '.'),"_noaxes_nolegend.png", sep=""), units = "in", height = 6, width = 10, res=300)
+  p= FeaturePlot(object = psor_ife_cyc_int, features = genes[[i]], cols = c("lightgrey", "blue"), pt.size = 1)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+#additional, individual feature plots
+genes = c("Col17a1","Krt10","Mki67","Top2a","Klk7","Krt1","Itga6","Itgb4","Mt1","Pcna","Lor","Flg","Ivl")
+
+genes_match = genes[genes %in% rownames(psor_ife_cyc_int)]
+for (i in 1:length(genes_match))
+{
+  png(paste("psor_ife_cyc_int_",genes_match[i],"_noaxes_nolegend_pt1.png",sep=""), units = "in", height = 5, width = 5, res=300)
+  p=FeaturePlot(object = psor_ife_cyc_int, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 1, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+Label by phase
+
+```{r}
+Idents(psor_ife_cyc_int) = "Phase"
+DimPlot(psor_ife_cyc_int, reduction = "umap")
+```
+
+### Marker Lists
+
+```{r message = FALSE}
+#SAVING MARKER LISTS
+all_res = c(0.1,0.2,0.4,0.6,0.8,1.0,1.2)
+for (i in all_res){
+  Idents(psor_ife_cyc_int) = paste("integrated_snn_res.", i, sep = '')
+  psor_ife_cyc_int.markers = FindAllMarkers(psor_ife_cyc_int, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  write.csv(psor_ife_cyc_int.markers, paste0("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyc_int/psor_ife_cyc_int.markers_",i,".csv"))
+}
+```
+
+At clustering resolution 0.2, we identified cluster 0 as representing basal cycling cells, and cluster 1 as representing spinous cycling cells.
+
+```{r}
+Idents(psor_ife_cyc_int) = "integrated_snn_res.0.2"
+DimPlot(psor_ife_cyc_int, reduction="umap", label=T, pt.size = 1)
+```
+
+```{r}
+FeaturePlot(psor_ife_cyc_int, features = c('Krt10','Col17a1') , label=T, pt.size = 1)
+```
+
+### Saving psor_ife_cyc_int
+
+```{r}
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyc_int')
+saveRDS(psor_ife_cyc_int, file="psor_ife_cyc_int.Rds") 
+```
+
+### Saving Metadata
+
+```{r}
+psor_ife_cyc_int_metadata = as.matrix(psor_ife_cyc_int@meta.data)
+setwd('C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/psor_int_filt/psor_ifeish/psor_ife/psor_ife_cyc_int')
+write.table(psor_ife_cyc_int_metadata,file="psor_ife_cyc_int_metadata.txt",sep="\t",col.names=T,row.names=T)
+```
+
+# PROPORTION ANALYSIS
+
+## Proportion of cycling cells that are basal/spinous
+
+First, we generate a table of proportions of basal and spinous cells that are cycling, with each cell representing the proportion of cycling cells that are either basal or spinous, for each sample.
+
+```{r}
+cyc_prop_table = prop.table(table(psor_ife_cyc_int_metadata[,"integrated_snn_res.0.2"],psor_ife_cyc_int_metadata[,"orig.ident"]),margin=2)
+rownames(cyc_prop_table) = c("Basal","Spinous")
+```
+
+```{r}
+cyc_prop_table
+```
+
+## Proportion of basal/spinous cells that are cycling
+
+The overall equation for calculating the proportion of Basal/Spinous cells that are cycling is as follows:
+
+$$
+Proportion\,of\,Basal/Spinous\,Cells\,that\,are\,Cycling = \dfrac{Cycling\,Basal/Spinous\,Cells}{All\,Basal/Spinous\,Cells}
+$$
+
+The total number of basal/spinous cells is calculated by adding the number of cycling basal/spinous cells to the number of non-cycling basal/spinous cells identified in psor_ife.
+
+Here, we calculate the proportion of non-cycling basal and spinous cells within the psor_ife dataset.
+
+```{r}
+DimPlot(psor_ife, reduction = "umap", label = TRUE)
+```
+
+The non-cycling spinous clusters were identified as clusters 1,3,5; and the non-cycling basal clusters were identified as clusters 0,2,6.
+
+```{r}
+FeaturePlot(psor_ife, features = c("Col17a1", "Krt10"))
+```
+
+We create a table of the number of cells from each sample that belong to each cluster.
+
+```{r}
+psor_ife_table = table(psor_ife$integrated_snn_res.0.4, psor_ife$orig.ident)
+psor_ife_table
+```
+
+We then subset the table using the non-cycling basal and spinous clusters.
+
+```{r}
+spn_clus = as.character(c(1,3,5))
+bas_clus = as.character(c(0,2,6))
+
+psor_ife_spn = psor_ife_table[spn_clus,]
+psor_ife_bas = psor_ife_table[bas_clus,]
+```
+
+We then create psor_ife_cyc_table, a table consisting of the number of cycling cells that are spinous/basal, for each sample.
+
+```{r}
+psor_ife_cyc_table = table(psor_ife_cyc_int$integrated_snn_res.0.2,psor_ife_cyc_int$orig.ident)
+rownames(psor_ife_cyc_table) = c("Basal","Spinous")
+psor_ife_cyc_table
+```
+
+Now, that we have the number of spinous/basal cells that are cycling and the total number of basal/spinous cells, we can calculate the proportion of spinous/basal cells that are cycling for each sample.
+
+```{r}
+spn_prop = psor_ife_cyc_table[2,]/(psor_ife_cyc_table[2,] + apply(psor_ife_spn,2,sum))
+print(spn_prop)
+```
+
+```{r}
+bas_prop = psor_ife_cyc_table[1,]/(psor_ife_cyc_table[1,] + apply(psor_ife_bas,2,sum))
+print(bas_prop)
+```

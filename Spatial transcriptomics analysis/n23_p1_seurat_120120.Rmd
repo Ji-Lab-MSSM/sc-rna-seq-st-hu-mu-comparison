@@ -1,0 +1,189 @@
+---
+title: "Processing Spatial Transcriptomic Data"
+author: "Larry Chen"
+date: "2023-01-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v4.1.1. You will need to install seurat version 4.1.1 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat4.1.0, eval = FALSE}
+remotes::install_version('Seurat', version = '4.1.1', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages/Seurat 4.1.1" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages/Seurat 4.1.1")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+## Load Objects
+```{r}
+dir = "C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ST/"
+vis.dir = paste(dir,"V10F24-007_A1/outs/",sep="")
+vis.dir2 = paste(dir,"V10F24-007_B1/outs/",sep="")
+
+n23v1 = Load10X_Spatial(data.dir = vis.dir, slice = "rep1")
+n23v2 =  Load10X_Spatial(data.dir = vis.dir2, slice = "rep2")
+```
+## Merge slices and assign sample identities to cells
+```{r}
+n23_p1 = merge(n23v1,n23v2,add.cell.ids = c("rep1","rep2"))
+n23_p1$sample = rep(1,ncol(n23_p1))
+n23_p1$sample[(ncol(n23v1)+1):(ncol(n23v1)+ncol(n23v2))] = 2
+```
+## cut out bottom portion of spots on folded/noisy tissue
+```{r}
+discard_table = read.table(paste(vis.dir2,"Extra.csv",sep=""),sep = ",",row.names = 1,header = T,stringsAsFactors = F)
+new_row = paste("rep2_",rownames(discard_table),sep="")
+rownames(discard_table) = new_row
+discard_spots = new_row[which(discard_table[,"Extra"]=="Discard")]
+keep_spots = colnames(n23_p1)[!colnames(n23_p1) %in% discard_spots]
+n23_p1 = subset(n23_p1, cells = keep_spots)
+
+n23_p1 = subset(n23_p1, nCount_Spatial > 200)
+```
+
+## Normalize data
+```{r}
+n23_p1 <- SCTransform(n23_p1, assay = "Spatial", return.only.var.genes = F)
+```
+
+## PCA/UMAP/clustering
+```{r, message = FALSE}
+keep.dims <- 1:20
+n23_p1 <- RunPCA(n23_p1, verbose = FALSE)
+ProjectDim(n23_p1, reduction = "pca", dims = 1:20)
+n23_p1 <- FindNeighbors(object = n23_p1, dims = keep.dims, verbose = FALSE, reduction = "pca") #PCA
+
+n23_p1 <- FindClusters(object = n23_p1, verbose = FALSE)
+n23_p1 <- FindClusters(object = n23_p1, resolution = 1, verbose = FALSE)
+n23_p1 <- RunUMAP(object = n23_p1, dims = keep.dims, verbose = FALSE, reduction = "pca")
+```
+## Graphing 
+```{r}
+DimPlot(n23_p1,label=T)
+```
+
+```{r}
+SpatialDimPlot(n23_p1, group.by = "SCT_snn_res.0.8", label = TRUE, label.size = 3)
+```
+
+```{r}
+Idents(n23_p1) = 'SCT_snn_res.0.8'
+SpatialDimPlot(n23_p1, label = TRUE, label.size = 3)
+```
+
+```{r}
+DimPlot(n23_p1,group.by = "sample")
+```
+
+```{r}
+VlnPlot(n23_p1,features = c("KRT10","KRT1"))
+```
+Note: clustering may differ slightly from what's shown in figure 2d, due to instability in clustering / differences in seurat/ seurat dependency versions
+```{r}
+SpatialDimPlot(n23_p1, images = "rep2")
+```
+
+```{r}
+FeaturePlot(n23_p1,features = c("COL17A1","SPRR2D","PTHLH","MMP10"))
+```
+
+```{r}
+VlnPlot(n23_p1,features = c("MMP10","COL17A1","IL24","KRT15","PTHLH","CCL2"))
+```
+
+```{r, eval = FALSE, message = FALSE}
+res = "SCT_snn_res.0.8"
+res = "SCT_snn_res.1"
+Idents(n23_p1) = res
+n23_p1.markers <- FindAllMarkers(object = n23_p1, only.pos = T)
+n23_p1_pca_noreg.markers = n23_p1.markers
+n23_p1.markers_sig = subset(n23_p1.markers, p_val_adj<0.05)
+n23_p1.markers_res1 <- FindAllMarkers(object = n23_p1, only.pos = T)
+n23_p1.markers_res1_sig = subset(n23_p1.markers_res1, p_val_adj<0.05)
+```
+
+```{r, eval = FALSE}
+setwd("~/Dropbox/NS_scRNA-seq/ST/N23_seurat/n23_p1")
+write.table(n23_p1.markers,file="n23_p1_res0.8_seurat_markers.csv",sep=",",row.names = T, col.names = T)
+write.table(n23_p1.markers_res1,file="n23_p1_res1_seurat_markers.csv",sep=",",row.names = T, col.names = T)
+write.table(n23_p1.markers,file="n23_p1_pca_no_reg_res0.8_seurat_markers.csv",sep=",",row.names = T, col.names = T)
+```
+
+```{r, eval = FALSE}
+n23_p1.pca.markers <- FindAllMarkers(object = n23_p1, only.pos = T)
+write.table(n23_p1.pca.markers,file="n23_p1_pca_res0.8_seurat_markers.csv",sep=",",row.names = T, col.names = T)
+
+n23_p1.markers = read.table("n23_p1_res0.8_seurat_markers.csv", sep = ",",header=T,row.names = 1, stringsAsFactors = F)
+n23_p1.markers_sig = subset(n23_p1.markers, p_val_adj<0.05)
+match(tme_tsk_ligs,n23_p1.markers_sig$gene)
+tme_tsk_ligs[tme_tsk_ligs %in% n23_p1.markers_sig$gene]
+
+n23_p1_top10 = n23_p1.markers %>% group_by(cluster) %>% top_n(10, avg_logFC) 
+DoHeatmap(n23_p1,features = n23_p1_top10$gene)
+
+n23_p1_pca_top10 = n23_p1.pca.markers %>% group_by(cluster) %>% top_n(10, avg_logFC)
+```
+
+```{r, eval = FALSE}
+#PCA
+setwd("~/Dropbox/NS_scRNA-seq/ST/N23_seurat/n23_p1/pca/")
+
+clus = levels(Idents(n23_p1))
+for (i in 1:length(clus)) {
+  p1 = SpatialDimPlot(n23_p1,cells.highlight = WhichCells(n23_p1,idents=clus[i]))
+  png(paste("n23_p1_SCT_pca_res0.8_highlight_clus",clus[i],".png",sep=""),width = 8, height=4, units = "in", res = 300)
+  print(p1)
+  dev.off()
+}
+```
+## Feature plots
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('KRT5'), images = 'rep2')
+```
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('KRT17'), images = 'rep2')
+```
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('MGST1'), images = 'rep2')
+```
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('DCD'), images = 'rep2')
+```
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('KRT10'), images = 'rep2')
+```
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('KRT25'), images = 'rep2')
+```
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('AWAT2'), images = 'rep2')
+```
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('PIP'), images = 'rep2')
+```
+```{r}
+SpatialFeaturePlot(n23_p1, features = c('KRT5'), images = 'rep2')
+```
+
+## save object
+```{r, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/")
+saveRDS(n23_p1,file="n23_p1.Rds")
+```

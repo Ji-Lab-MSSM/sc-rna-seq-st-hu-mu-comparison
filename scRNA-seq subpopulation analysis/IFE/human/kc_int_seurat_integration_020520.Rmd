@@ -1,0 +1,212 @@
+---
+title: "Integrating Human KCs"
+author: "Larry Chen"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r load-packages, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r, include = FALSE}
+kc_int = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/kc_int/kc_int.Rds')
+```
+
+## Load data
+
+```{r, eval = FALSE}
+load("/oak/stanford/groups/khavari/users/andrewji/seurat_analysis/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_norm_update.Robj")
+
+#kc <- CreateSeuratObject(kc.data, meta.data = metadata)
+kc.list <- SplitObject(kc_norm_update, split.by = "patient")
+
+for (i in 1:length(kc.list)) {
+    kc.list[[i]] <- NormalizeData(kc.list[[i]], verbose = FALSE)
+    kc.list[[i]] <- FindVariableFeatures(kc.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+}
+```
+
+## Integrate data
+
+```{r, eval = FALSE}
+# Try 7 patients with cells > 700 in dataset
+reference.list <- kc.list[c("P1","P2","P5","P6","P7","P9","P10")]
+kc.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+
+kc_int <- IntegrateData(anchorset = kc.anchors, dims = 1:30)
+DefaultAssay(kc_int) <- "integrated"
+```
+
+## Scale/PCA/UMAP
+
+```{r, eval = FALSE}
+kc_int <- ScaleData(kc_int, verbose = FALSE)
+kc_int <- RunPCA(kc_int, npcs = 30, verbose = FALSE)
+kc_int <- RunUMAP(kc_int, reduction = "pca", dims = 1:30)
+```
+
+## Patient/Subpop UMAPs
+
+```{r, eval = FALSE}
+p1 <- DimPlot(kc_int, reduction = "umap", group.by = "patient")
+p2 <- DimPlot(kc_int, reduction = "umap", group.by = "subpop", label = TRUE, 
+    repel = TRUE) + NoLegend()
+p = plot_grid(p1, p2)
+
+png("kc_int_pt7_labelbypatient_subpop.png", units = "in", height = 5, width = 10, res=300)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p1 <- DimPlot(kc_int, reduction = "umap", group.by = "patient")
+p2 <- DimPlot(kc_int,reduction = "umap", group.by = "subpop", label = TRUE, 
+    repel = TRUE) + NoLegend()
+plot_grid(p1, p2)
+```
+
+## Clustering
+
+```{r, eval = FALSE}
+kc_int <- FindNeighbors(kc_int, dims = 1:30, verbose = T)
+kc_int <- FindClusters(kc_int, resolution = 0.1, verbose = FALSE)
+kc_int <- FindClusters(kc_int, resolution = 0.15, verbose = FALSE)
+kc_int <- FindClusters(kc_int, resolution = 0.2, verbose = FALSE)
+kc_int <- FindClusters(kc_int, resolution = 0.25, verbose = FALSE)
+kc_int <- FindClusters(kc_int, resolution = 0.3, verbose = FALSE)
+kc_int <- FindClusters(kc_int, resolution = 0.4, verbose = FALSE)
+kc_int <- FindClusters(kc_int, resolution = 0.6, verbose = FALSE)
+kc_int <- FindClusters(kc_int, resolution = 0.8, verbose = FALSE)
+```
+
+## Graphing
+
+### Generate UMAPS
+
+At resolutions 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.6, and 0.8, using the integrated assay
+
+```{r, eval = FALSE}
+all_res = c(0.1,0.15,0.2,0.25,0.3,0.4,0.6,0.8)
+for (i in 1:length(all_res))
+{
+	res = all_res[i]
+	Idents(kc_int) = paste("integrated_snn_res.",res,sep="")
+	png(paste("kc_int_res",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+	p=DimPlot(kc_int, reduction="umap", label=T, do.return = T, pt.size = 1)
+	print(p)
+	dev.off()
+}
+```
+
+### Feature Plots
+
+```{r, eval = FALSE}
+genes = c("ITGA6","ITGB1","ITGA2","ITGA3","ODC1","FOSL1","HAS3","PLAU","PHLDA1","PHLDA2","COL17A1","MMP10","PTHLH","MMP1","KRT1",
+	"MKI67","ZNF750","ASS1","POSTN","HELLS","RRM2","PTTG1","IVL","TGM3","LOR")
+genes = c("KRT14","KRT15","KRT5")
+for (i in 1:length(genes))
+{
+  png(paste("kc_int_",genes[i],"_noaxes_nolegend_pt1.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = kc_int, features = genes[i], cols = c("lightgrey", "blue"), pt.size = 1)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+## Calculate Cell Cycle Scores
+
+```{r, eval = FALSE}
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+kc_int <- CellCycleScoring(kc_int, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+```
+
+### Plot Cell Cycle Scores
+
+```{r, eval = FALSE}
+p1 <- DimPlot(kc_int, reduction = "umap")
+
+
+png("kc_int_pt7_cc_phase.png", units = "in", height = 5, width = 5, res=300)
+print(p1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(kc_int) = 'Phase'
+DimPlot(kc_int, reduction = "umap")
+```
+
+## Find Markers
+
+### At resolution 0.1
+
+```{r, eval = FALSE}
+### AT res 0.1
+Idents(kc_int) = "integrated_snn_res.0.1"
+
+markers <- FindAllMarkers(kc_int, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj <0.05)
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_int")
+write.table(markers.filt,file="kc_int_seurat_markers_res0.1.txt",sep = "\t",row.names = T,col.names = T)
+```
+
+### At resolution 0.6
+
+```{r, eval = FALSE}
+### AT res 0.6
+Idents(kc_int) = "integrated_snn_res.0.6"
+
+markers <- FindAllMarkers(kc_int, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj <0.05)
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_int")
+write.table(markers.filt,file="kc_int_seurat_markers_res0.6.txt",sep = "\t",row.names = T,col.names = T)
+```
+
+## Gene violin plots
+
+```{r, eval = FALSE}
+genes = c("ITGA6","ITGB1","ITGA2","ITGA3","ODC1","FOSL1","HAS3","PLAU","PHLDA1","PHLDA2","COL17A1","MMP10","PTHLH","MMP1","KRT1",
+	"MKI67","ZNF750","ASS1","POSTN","HELLS","RRM2","PTTG1","IVL","TGM3","LOR","SLURP1","CALML5","KRT14","KRT15","KRT5")
+for (i in 1:length(genes))
+{
+  pdf(paste("kc_int_",genes[i],"_noaxes_nolegend_vlnplot.pdf",sep=""), height = 3, width = 6)
+  p=VlnPlot(object = kc_int, features = genes[i], pt.size = 0)
+  #p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_int")
+saveRDS(kc_int,file="kc_int.Rds")
+```

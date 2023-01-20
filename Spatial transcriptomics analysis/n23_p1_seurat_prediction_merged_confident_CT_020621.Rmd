@@ -1,0 +1,135 @@
+---
+title: "Generating celltype predictions for ST spots using scRNA-seq data"
+author: "Larry Chen"
+date: "2023-01-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v4.1.1. You will need to install seurat version 4.1.1 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat4.1.0, eval = FALSE}
+remotes::install_version('Seurat', version = '4.1.1', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages/Seurat 4.1.1" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages/Seurat 4.1.1")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+## Load Data
+
+```{r, eval = FALSE}
+ns_int_keep = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int/ns_int_keep/ns_int_keep.Rds")
+```
+
+### import ST data
+
+```{r, eval = FALSE}
+DefaultAssay(ns_int) = "integrated"
+n23_p1 = readRDS("/scratch/groups/khavari/users/andrewji/ST/normal_skin/n23_p1.Rds")
+```
+
+## Predictions using ns_int_keep
+
+Make predictions on spot 'cell'-types based on sc-RNAseq data
+
+### N23P1
+
+```{r, eval = FALSE}
+n23p1.anchors <- FindTransferAnchors(reference = ns_int_keep, query = n23_p1, 
+    dims = 1:30, k.filter=NA)
+n23p1_predictions <- TransferData(anchorset = n23p1.anchors, refdata = ns_int_keep$ST_celltypes, 
+    dims = 1:30)
+```
+
+#### Save predictions as txt
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ST/normal_skin/seurat_pred")
+write.table(n23p1_predictions,file="n23p1_predictions_merged_confident_CT.txt",sep="\t",row.names=T,col.names=T)
+```
+
+#### Save predictions as txt
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ST/normal_skin/seurat_pred")
+write.table(n10_predictions,file="n10_predictions_merged_confident_CT.txt",sep="\t",row.names=T,col.names=T)
+```
+
+### Average Expression
+
+```{r, eval = FALSE}
+x = AverageExpression(ns_int_keep)
+avg_exp_rna = x$RNA
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/")
+write.table(avg_exp_rna,file="ns_int_keep_celltypes_avg_exp_rna.txt",sep = "\t",row.names = T,col.names = T)
+```
+
+```{r, eval = FALSE}
+avg_exp_int = x$integrated
+write.table(avg_exp_int,file="ns_int_keep_celltypes_avg_exp_int.txt",sep = "\t",row.names = T,col.names = T)
+```
+
+## Predictions using ns_int
+
+Used for fig 1
+
+### Load Data
+
+```{r, eval = FALSE}
+ns_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int.Rds")
+DefaultAssay(ns_int) = "RNA"
+```
+
+```{r, eval = FALSE}
+ST_celltypes = as.character(ns_int$integrated_snn_res.0.6)
+ST_celltypes = paste("ns_int_res0.6_C",ST_celltypes,sep="")
+ns_int$ST_celltypes = ST_celltypes
+```
+
+### N23P1
+
+```{r, eval = FALSE}
+DefaultAssay(ns_int) = "integrated"
+
+n23p1_ns_int.anchors <- FindTransferAnchors(reference = ns_int, query = n23_p1, 
+    dims = 1:30, k.filter=NA)
+n23p1_ns_int_predictions <- TransferData(anchorset = n23p1_ns_int.anchors, refdata = ns_int$ST_celltypes, 
+    dims = 1:30)
+```
+
+#### Save predictions as txt
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ST/normal_skin/seurat_pred")
+write.table(n23p1_ns_int_predictions,file="n23p1_predictions_ns_int_res0.6_ref.txt",sep="\t",row.names=T,col.names=T)
+```
+
+### Average Expression
+
+```{r, eval = FALSE}
+x = AverageExpression(ns_int)
+avg_exp_rna = x$RNA
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/")
+write.table(avg_exp_rna,file="ns_int_celltypes_avg_exp_rna.txt",sep = "\t",row.names = T,col.names = T)
+```
+
+```{r, eval = FALSE}
+avg_exp_int = x$integrated
+write.table(avg_exp_int,file="ns_int_celltypes_avg_exp_int.txt",sep = "\t",row.names = T,col.names = T)
+```

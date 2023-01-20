@@ -1,0 +1,238 @@
+---
+title: "Isolating cycling cells from cheng_ife"
+author: "Larry Chen"
+date: "2023-01-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-packages, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat)
+library(SeuratObject)
+library(patchwork)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(tibble)
+library(sessioninfo)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+##Reading in cheng_ife_object
+```{r read-cheng_ife}
+cheng_ife = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife.Rds")
+```
+
+## Subsetting cheng_ife_cyc
+
+```{r subset-cheng_ife}
+UpdateSeuratObject(cheng_ife)
+Idents(cheng_ife) = "integrated_snn_res.0.4"
+cheng_ife_cyc = subset(cheng_ife,idents = c(5,7))
+```
+
+## Preprocessing cheng_ife_cyc
+
+### Integration
+
+```{r split-cheng_ife_cyc}
+DefaultAssay(cheng_ife_cyc) = 'RNA'
+hu.list <- SplitObject(cheng_ife_cyc, split.by = "sample")
+```
+
+```{r normalize-cheng_ife_cyc}
+# Normalize all objects
+for (i in 1:length(hu.list)) {
+  hu.list[[i]] <- NormalizeData(hu.list[[i]], verbose = FALSE)
+  hu.list[[i]] <- FindVariableFeatures(hu.list[[i]], selection.method = "vst", 
+                                       nfeatures = 2000, verbose = FALSE)
+  print(i)
+}
+```
+
+```{r integrate-cheng_ife_cyc, message = FALSE}
+hu.anchors <- FindIntegrationAnchors(object.list = hu.list, dims = 1:30, k.filter = NA)
+cheng_ife_cyc_int <- IntegrateData(anchorset = hu.anchors, dims = 1:30)
+print(dim(cheng_ife_cyc_int))
+DefaultAssay(cheng_ife_cyc_int) <- "integrated"
+```
+
+### Scale Data
+
+```{r scale-cheng_ife_cyc_int}
+cheng_ife_cyc_int <- ScaleData(cheng_ife_cyc_int, verbose = FALSE, vars.to.regress = c("S.Score","G2M.Score","percent.mt","nFeature_RNA")) # Tried only S.Score and G2M.Score and results look very similar
+```
+
+### PCA + UMAP
+
+```{r pca-umap-cheng_ife_cyc_int}
+cheng_ife_cyc_int <- RunPCA(cheng_ife_cyc_int, npcs = 30, verbose = FALSE)
+cheng_ife_cyc_int <- RunUMAP(cheng_ife_cyc_int, reduction = "pca", dims = 1:30)
+```
+
+### Generate UMAP to check for sample
+
+```{r sample-umap-cheng_ife_cyc_int, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
+
+png("cheng_ife_cyc_int_labelbysample.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(cheng_ife_cyc_int, reduction = "umap", group.by = "sample")
+print(p1)
+dev.off()
+```
+
+### Clustering
+
+```{r clustering-cheng_ife_cyc}
+all_res = c(0.1,0.2,0.4,0.6,0.8,1,1.2,1.5)
+cheng_ife_cyc_int <- FindNeighbors(cheng_ife_cyc_int, dims = 1:30, verbose = T)
+
+for (i in all_res){
+  cheng_ife_cyc_int <- FindClusters(cheng_ife_cyc_int, resolution = i, verbose = FALSE)
+}
+```
+
+### QC
+
+#### Generate QC featureplots
+
+```{r qc-cheng_ife_cyc}
+FeaturePlot(cheng_ife_cyc_int,features = c("COL17A1","KRT1","S.Score","G2M.Score","percent.mt","nFeature_RNA")) 
+```
+
+### PLOT GENERATION
+
+#### UMAPs at all clustering res
+
+```{r umap-cheng_ife_cyc_int}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(cheng_ife_cyc_int) = paste("integrated_snn_res.",res,sep="")
+  png(paste("cheng_ife_cyc_int_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(cheng_ife_cyc_int, reduction="umap", label=T, pt.size = 0.25)
+  print(p)
+  dev.off()
+}
+```
+
+#### Feature Plots
+
+##### Defining genes to be projected
+
+```{r defining-feature-genes-cheng_ife_cyc_int}
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD207","CD3E",
+          "MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1","MKI67",
+          "CCR7","CCL19","SELE","DIO2","WIF1","KRT15","COL17A1","LOR","FLG",
+          "FGF7","SFRP1","NRN1","NOV","FZD10","MMP7",
+          "ATP1A1","ATP1B1","ATP6V1B1","HAS1","RUNX3","KRT77","GJB2","GJB6","DEFB1",
+          "MDK","SEMA3C","PIP","DCD","AQP5","TSPAN8","SCGB1B2P","TMEM213",
+          "IL36G","IL36B","IL36A","IL1A","IL1B","CLEC10A","KRT79","CCL2","CCL27","TNFSF10","ANXA1",
+          "CCL20","KRT6A","KRT6B","KRT16","KRT6C","KRT23","SOSTDC1",
+          "CCR7","CCL19","SELE","DIO2","WIF1","COL17A1","LOR","FLG","TP63","PDPN","PCNA","TOP2A",
+          "MT1G","MT1E","MT1H","MT1X","RHOV","DMKN","HES1","HES4","KRT1","KRT10","DSP","CCND1","THBD","GATA3")
+genes_match = genes[genes %in% rownames(cheng_ife_cyc_int)]
+```
+
+##### Generating Feature Plots
+
+```{r featureplots-cheng_ife_cyc_int, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int/feature_plots")
+for (i in 1:length(genes_match))
+{
+  png(paste("cheng_ife_cyc_int_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = cheng_ife_cyc_int, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+#### UMAP by tissue
+
+```{r tissue-umap-cheng_ife_cyc_int}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
+png("cheng_ife_cyc_int_groupby_tissue.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(cheng_ife_cyc_int, reduction="umap", label=T, group.by = "tissue", pt.size = 0.1)
+dev.off()
+```
+
+#### UMAP by phase
+
+```{r phase-umap-cheng_ife_cyc_int}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
+
+Idents(cheng_ife_cyc_int) = "Phase"
+
+png("cheng_ife_cyc_int_labelby_ccphase_2d.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(cheng_ife_cyc_int, reduction = "umap")
+print(p1)
+dev.off()
+```
+
+#### UMAP by cell cycle score
+
+```{r cc-umap-cheng_ife_cyc_int}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
+
+cc_scores = c("S.Score","G2M.Score")
+
+for (i in 1:length(cc_scores))
+{
+  png(paste("cheng_ife_cyc_int_",cc_scores[i],"_noaxes_nolegend_pt0.25_legend_RNA.png",sep=""), units = "in", height = 5, width = 5, res=300)
+  p=FeaturePlot(object = cheng_ife_cyc_int, features = cc_scores[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+#### Marker Lists
+
+```{r marker-lists-cheng_ife_cyc_int, message = FALSE, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
+
+for (i in all_res){
+  Idents(cheng_ife_cyc_int) = paste("integrated_snn_res.", i, sep = '')
+  cheng_ife_cyc_int.markers = FindAllMarkers(cheng_ife_cyc_int, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+  write.csv(cheng_ife_cyc_int.markers, paste0("cheng_ife_cyc_int_seurat_markers_res",i,".csv"))
+}
+```
+# IDENTIFICATION
+In this case, at resolution 0.1, cluster 0 was identified as representing spinous cycling cells, and cluster 1 as representing basal cycling cells. 
+
+```{r 0.1-umap-cheng_ife_cyc_int}
+Idents(cheng_ife_cyc_int) = "integrated_snn_res.0.1"
+DimPlot(cheng_ife_cyc_int, reduction = "umap", label = TRUE)
+```
+```{r col17a1-krt10-umap-cheng_ife_cyc_int}
+DefaultAssay(cheng_ife_cyc_int) = "RNA"
+FeaturePlot(cheng_ife_cyc_int, features = c("COL17A1", "KRT10"))
+DefaultAssay(cheng_ife_cyc_int) = "integrated"
+```
+### SAVING OBJECT
+
+```{r save-cheng_ife_cyc_int}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
+saveRDS(cheng_ife_cyc_int, file="cheng_ife_cyc_int.Rds")
+```
+
+### SAVE METADATA
+
+```{r save-metadata-cheng_ife_cyc_int}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/Psoriasis/hu/cheng_ife/cheng_ife_cyc_int")
+cheng_ife_cyc_int_metadata = as.matrix(cheng_ife_cyc_int@meta.data)
+write.table(cheng_ife_cyc_int_metadata,file="cheng_ife_cyc_int_metadata.txt",sep="\t",col.names=T,row.names=T)
+```

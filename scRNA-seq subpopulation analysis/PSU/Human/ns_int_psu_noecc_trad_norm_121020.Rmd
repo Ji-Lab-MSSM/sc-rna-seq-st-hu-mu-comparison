@@ -1,0 +1,252 @@
+---
+title: "Identifying contaminating fibroblasts from human PSU cells"
+author: "Larry Chen"
+date: "2023-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+It was noticed that there was a group of cells within the identified PSU cells that appeared to be contaminating fibroblast/mesenchymal cells. These cells formed their own cluster \@ resolution 0.6, when clustering was performed on the RNA assay. These fibroblasts were later added to the mesenchymal dataset.
+
+```{r secret-load, include = FALSE}
+ns_int_psu_noecc = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_psu_noecc.Rds")
+```
+
+## Load Object
+
+```{r, eval = FALSE}
+ns_int_psu_noecc = readRDS("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu_noecc/ns_int_psu_noecc.Rds")
+DefaultAssay(ns_int_psu_noecc) = "RNA"
+```
+
+## Preprocessing
+
+```{r, eval = FALSE}
+ns_int_psu_noecc[["percent.mt"]] <- PercentageFeatureSet(ns_int_psu_noecc, pattern = "^MT-")
+
+ns_int_psu_noecc <- NormalizeData(ns_int_psu_noecc)
+ns_int_psu_noecc <- FindVariableFeatures(ns_int_psu_noecc, selection.method = "vst", nfeatures = 2000)
+```
+
+## Scale Data
+
+Regressing QC measures nCount_RNA and percent.mt
+
+```{r, eval = FALSE}
+all.genes <- rownames(ns_int_psu_noecc)
+ns_int_psu_noecc <- ScaleData(ns_int_psu_noecc, features = all.genes, vars.to.regress = c("nCount_RNA","percent.mt"))
+```
+
+## PCA
+
+```{r, eval = FALSE}
+ns_int_psu_noecc <- RunPCA(ns_int_psu_noecc, features = VariableFeatures(object = ns_int_psu_noecc))
+```
+
+## Clustering
+
+```{r, eval = FALSE}
+ns_int_psu_noecc <- FindNeighbors(ns_int_psu_noecc, dims = 1:15, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.4, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.6, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.8, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 1, verbose = FALSE)
+ns_int_psu_noecc <- FindClusters(ns_int_psu_noecc, resolution = 0.2, verbose = FALSE)
+```
+
+## Run UMAP
+
+```{r, eval = FALSE}
+ns_int_psu_noecc <- RunUMAP(ns_int_psu_noecc, dims = 1:15, verbose = TRUE)
+```
+
+## UMAPS
+
+### By orig.ident
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu_noecc/trad_norm/plots")
+
+png("ns_int_psu_noecc_labelby_origident.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_noecc, reduction="umap", do.label=F, group.by = "orig.ident", do.return = T, pt.size = 0.25)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction="umap", do.label=F, group.by = "orig.ident", do.return = T, pt.size = 0.25)
+```
+
+### By sample
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_labelby_sample.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_noecc, reduction="umap", do.label=F, group.by = "sample", do.return = T, pt.size = 0.25)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction="umap", do.label=F, group.by = "sample", do.return = T, pt.size = 0.25)
+```
+
+### Cluster Resolutions
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_res.0.4.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T,  group.by = "RNA_snn_res.0.4", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T,  group.by = "RNA_snn_res.0.4", pt.size = 0.1)
+```
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_res.0.6.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T,  group.by = "RNA_snn_res.0.6", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T,  group.by = "RNA_snn_res.0.6", pt.size = 0.1)
+```
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_res.0.8.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T, group.by = "RNA_snn_res.0.8", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T, group.by = "RNA_snn_res.0.8", pt.size = 0.1)
+```
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_res.1.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T, group.by = "RNA_snn_res.1", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T, group.by = "RNA_snn_res.1", pt.size = 0.1)
+```
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_res.0.2.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T, group.by = "RNA_snn_res.0.2", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(ns_int_psu_noecc, reduction="umap", label=T, group.by = "RNA_snn_res.0.2", pt.size = 0.1)
+```
+
+### By nCount_RNA
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_nUMI.png", units = "in", height = 5, width = 5, res=300)
+p=FeaturePlot(object = ns_int_psu_noecc, features = "nCount_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+p = p + NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(object = ns_int_psu_noecc, features = "nCount_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+```
+
+### By nFeature_RNA
+
+```{r, eval = FALSE}
+png("ns_int_psu_noecc_nFeature.png", units = "in", height = 5, width = 5, res=300)
+p=FeaturePlot(object = ns_int_psu_noecc, features = "nFeature_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+p = p + NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(object = ns_int_psu_noecc, features = "nFeature_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+```
+
+## Feature Plots
+
+```{r, eval = FALSE}
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD163","CD207",
+  "CD3E","MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1",
+  "KRT23","KRT25","KRT6A","KRT16","KRT17","PPARG","DIO2","COMP","FGF7","COL17A1","TP63","PTN","SAT1","SOX4","KLF5","TNC",
+  "PTHLH","MT1X","MT1G","MT1H","MT1E","SFRP1","DMKN","ZNF750","IVL","SOSTDC1","FGF18","IL37","IL1F10","IL36RN","IL1RN",
+  "MDK","LGALS1","CD151","ITGB1","MKI67","LUM","COL6A1","SOX2","DHRS9","LCE1E","PIP",
+  "S100P","MMP7","KRT77","FZD10","PCDH19","DLX3","ANGPTL7","PARM1","KRT8","KRT18","CD200","CD59","FST",
+  "MSX2","BARX2","IL11RA","LGR5","LGR6","FGF5","EDN2","CST6","KRT79", "CD34","PTN",
+  "RUNX3","HAS1","RUNX2","GJB6","GJB2","AQP5","KRT7","TMEM213","KIF12","TSPAN18","MFAP2","CLDN10","FAM13A","ID1","ID3",
+  "KRT7","TMEM213","KRT75","TP63","SOX2","CORIN","PROM1","NRG2","CNTN1","ENPP1","DACT1","SBSPON","BDNF")
+genes_match = genes[genes %in% rownames(ns_int_psu_noecc)]
+
+for (i in 1:length(genes_match))
+{
+  png(paste("ns_int_psu_noecc_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = ns_int_psu_noecc, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+FeaturePlot(object = ns_int_psu_noecc, features = c('SFRP2','APOE', 'SFRP1'), cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+```
+
+## QC violin plot
+
+```{r, eval = FALSE}
+pdf("ns_int_psu_noecc_nCount_Feature.pdf",height=4,width=6)
+VlnPlot(ns_int_psu_noecc,features = c("nCount_RNA","nFeature_RNA"), group.by = "sample", pt.size=0)
+dev.off()
+```
+
+```{r, echo = FALSE}
+VlnPlot(ns_int_psu_noecc,features = c("nCount_RNA","nFeature_RNA"), group.by = "sample", pt.size=0)
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu_noecc/")
+saveRDS(ns_int_psu_noecc, file="ns_int_psu_noecc.Rds") 
+```
+
+## Find Markers
+
+```{r, eval = FALSE}
+Idents(ns_int_psu_noecc) = "RNA_snn_res.0.6"
+
+markers <- FindAllMarkers(ns_int_psu_noecc, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu_noecc/trad_norm")
+write.table(markers.filt, file = "ns_int_psu_noecc_trad_norm_seurat_markers_res0.6.csv",sep = ",",row.names = T, col.names=T)
+```

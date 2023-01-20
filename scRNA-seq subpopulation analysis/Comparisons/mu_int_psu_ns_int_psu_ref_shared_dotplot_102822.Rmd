@@ -1,0 +1,227 @@
+---
+title: '"MU/HU PSU cell dotplots"'
+author: "Larry Chen"
+date: "2023-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For Figure 2b
+
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+library(nichenetr)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r}
+mu_int_psu = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/psu/mu_int_psu.Rds")
+```
+
+```{r, eval = FALSE}
+res = 0.6
+setwd("~/Dropbox/mu_all/integrated/psu")
+Idents(mu_int_psu) = "integrated_snn_res.0.6"
+png(paste("mu_int_psu_res_",res,"_nolabel.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_psu, reduction="umap", label=F, pt.size = 0.25)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(mu_int_psu) = "integrated_snn_res.0.6"
+DimPlot(mu_int_psu, reduction="umap", label=F, pt.size = 0.25)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_psu_res_",res,"_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_psu, reduction="umap", label=T, pt.size = 0.25)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_psu, reduction="umap", label=T, pt.size = 0.25)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_psu_res_",res,"_nolabel_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_psu, reduction="umap", label=F, pt.size = 0.25)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_psu, reduction="umap", label=F, pt.size = 0.25)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_psu_res_",res,"_noaxes_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_psu, reduction="umap", label=T, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(mu_int_psu, reduction="umap", label=T, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_psu_res_",res,"_noaxes_nolabel_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_psu, reduction="umap", label=F, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(mu_int_psu, reduction="umap", label=F, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_psu_res_",res,"_noaxes_color_order_largelabel.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_psu, reduction="umap", label=T,label.size = 8, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(mu_int_psu, reduction="umap", label=T,label.size = 8, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+```
+
+```{r, eval = FALSE}
+Idents(mu_int_psu) = "orig.ident"
+png("mu_int_psu_labelby_orig.ident.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(mu_int_psu, reduction = "umap")
+print(p1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(mu_int_psu) = "orig.ident"
+p1 <- DimPlot(mu_int_psu, reduction = "umap")
+print(p1)
+```
+
+```{r, eval = FALSE}
+mu_genes = c("Ccl27a","Krt17","Cst6","Ptn","Fst","Pthlh","Krt15","Lhx2","Cd34","Lgr5","Barx2","Mki67","Krt71","Krt28","Krt35","Fabp4","Pparg","Awat2")
+Idents(mu_int_psu) = "integrated_snn_res.0.6"
+ident_order = c(2,5,4,8,14,7,6,17,16,19,11,0,1,15,10,12,13,3,9,18)
+levels(mu_int_psu) = ident_order
+setwd("~/Dropbox/mu_all/integrated/psu")
+pdf("mu_int_psu_sub_dotplot_markers_90.pdf", height = 10, width=6)
+p = DotPlot(mu_int_psu,features = mu_genes)
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+mu_genes = c("Ccl27a","Krt17","Cst6","Ptn","Fst","Pthlh","Krt15","Lhx2","Cd34","Lgr5","Barx2","Mki67","Krt71","Krt28","Krt35","Fabp4","Pparg","Awat2")
+Idents(mu_int_psu) = "integrated_snn_res.0.6"
+ident_order = c(2,5,4,8,14,7,6,17,16,19,11,0,1,15,10,12,13,3,9,18)
+levels(mu_int_psu) = ident_order
+p = DotPlot(mu_int_psu,features = mu_genes)
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#p = p + RotatedAxis()
+print(p)
+```
+
+```{r, eval = FALSE}
+pdf("mu_int_psu_sub_dotplot_markers_90_RdBu.pdf", height = 10, width=6)
+p = DotPlot(mu_int_psu,features = mu_genes, cols = "RdBu")
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(mu_int_psu,features = mu_genes, cols = "RdBu")
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#p = p + RotatedAxis()
+print(p)
+```
+
+```{r}
+ns_int_psu_ref = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_psu_ref.Rds")
+```
+
+```{r, eval = FALSE}
+Idents(ns_int_psu_ref) = "integrated_snn_res.1"
+hu_ident_order = c(0,5,10,4,6,9,8,1,2,12,13,3,15,7,16,14,11,17)
+levels(ns_int_psu_ref) = hu_ident_order
+hu_genes = convert_mouse_to_human_symbols(mu_genes)
+names(hu_genes) = NULL
+c("SOSTDC1", "PTN", "FST", "KRT17", "CST6", "KRT15", "CD34", 
+  "DIO2", "LGR5", "MKI67", "KRT71", "KRT28", "KRT25", "AWAT2")
+setwd("~/Dropbox/ns_int/ns_int_psu/ns_int_psu_filt/ns_int_psu_ref")
+pdf("ns_int_psu_ref_dotplot_markers_90.pdf", height = 10, width=6)
+p = DotPlot(ns_int_psu_ref,features = hu_genes)
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(ns_int_psu_ref) = "integrated_snn_res.1"
+hu_ident_order = c(0,5,10,4,6,9,8,1,2,12,13,3,15,7,16,14,11,17)
+levels(ns_int_psu_ref) = hu_ident_order
+hu_genes = convert_mouse_to_human_symbols(mu_genes)
+names(hu_genes) = NULL
+c("SOSTDC1", "PTN", "FST", "KRT17", "CST6", "KRT15", "CD34", 
+  "DIO2", "LGR5", "MKI67", "KRT71", "KRT28", "KRT25", "AWAT2")
+p = DotPlot(ns_int_psu_ref,features = hu_genes)
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#p = p + RotatedAxis()
+print(p)
+```
+
+```{r, eval = FALSE}
+pdf("ns_int_psu_ref_dotplot_markers_90_RdBu.pdf", height = 10, width=6)
+p = DotPlot(ns_int_psu_ref,features = hu_genes, cols = "RdBu")
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(ns_int_psu_ref,features = hu_genes, cols = "RdBu")
+p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#p = p + RotatedAxis()
+print(p)
+```

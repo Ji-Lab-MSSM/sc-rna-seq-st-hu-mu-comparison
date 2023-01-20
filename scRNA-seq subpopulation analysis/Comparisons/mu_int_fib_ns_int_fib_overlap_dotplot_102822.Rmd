@@ -1,0 +1,253 @@
+---
+title: "MU/HU MES cell dotplots"
+author: "Larry Chen"
+date: "2023-01-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For Figure 2e
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r}
+mu_int_fib = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/mes/mu_int_fib.Rds")
+```
+
+```{r, eval = FALSE}
+res = 0.6
+Idents(mu_int_fib) = "integrated_snn_res.0.6"
+png(paste("mu_int_fib_res_",res,"_nolabel.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_fib, reduction="umap", label=F, pt.size = 0.25)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(mu_int_fib) = "integrated_snn_res.0.6"
+p=DimPlot(mu_int_fib, reduction="umap", label=F, pt.size = 0.25)
+print(p)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_fib_res_",res,"_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_fib, reduction="umap", label=T, pt.size = 0.25)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(mu_int_fib, reduction="umap", label=T, pt.size = 0.25)
+print(p)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_fib_res_",res,"_nolabel_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_fib, reduction="umap", label=F, pt.size = 0.25)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(mu_int_fib, reduction="umap", label=F, pt.size = 0.25)
+print(p)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_fib_res_",res,"_noaxes_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_fib, reduction="umap", label=T, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(mu_int_fib, reduction="umap", label=T, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_fib_res_",res,"_noaxes_nolabel_color_order.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_fib, reduction="umap", label=F, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(mu_int_fib, reduction="umap", label=F, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+```
+
+```{r, eval = FALSE}
+png(paste("mu_int_fib_res_",res,"_noaxes_color_order_largelabel.png",sep=""), units = "in", height = 5, width = 6, res=300)
+p=DimPlot(mu_int_fib, reduction="umap", label=T,label.size = 8, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(mu_int_fib, reduction="umap", label=T,label.size = 8, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+```
+
+```{r, eval = FALSE}
+Idents(mu_int_fib) = "orig.ident"
+png("mu_int_fib_labelby_orig.ident.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(mu_int_fib, reduction = "umap")
+print(p1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(mu_int_fib) = "orig.ident"
+p1 <- DimPlot(mu_int_fib, reduction = "umap")
+print(p1)
+```
+
+```{r, eval = FALSE}
+genes = c("Krt14", "Krt5", "Krt1", "Krt10", "Lhx2", "Krt19", 
+          "Azgp1", "Krt15", "Col1a1","Thy1","Pdgfra","Pdgfrb","Acta2","Mcam","Myh9","Sparc","Lum",
+          "Il31ra","Mfap2","Cldn10","Fam13a","Mt1","Mt2","Mmp10","Pthlh","Tnc","Mdk","Lgals1",
+          "Cxcl12","Gpx3","Mfap5","Corin","Dcn","Tagln","Des","Acta1","Sfrp2","Cd34",
+          "Tnn","Abi3bp","Ramp1","Crabp1","Notum","Pappa2","Nrg2","Cntn1","Grem2","Mylk",
+          "Acan","Sox2","Lef1","Ccl2","Cd276","Mki67","Top2a")
+genes = c("Apoe","Sfrp1")
+genes = c("Acan")
+
+DefaultAssay(mu_int_fib) = "RNA"
+genes_match = genes[genes %in% rownames(mu_int_fib)]
+
+for (i in 1:length(genes_match))
+{
+  png(paste("mu_int_fib_",genes_match[i],"_noaxes_nolegend_pt0.25_RNA.png",sep=""), units = "in", height = 5, width = 5, res=300)
+  p=FeaturePlot(object = mu_int_fib, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+```{r}
+Idents(mu_int_fib) = "integrated_snn_res.0.6"
+ident_order = c(5,11,1,2,3,0,4,10,7,6,9)
+mu_int_fib_sub = subset(mu_int_fib, idents = ident_order)
+levels(mu_int_fib_sub) = rev(ident_order)
+```
+
+```{r, eval = FALSE}
+pdf("mu_int_fib_sub_dotplot_markers.pdf", height = 8, width=5)
+p = DotPlot(mu_int_fib_sub,features = c("Sfrp2","Dpp4","Apoe","Fmo1","Ccl19","Sfrp4","Sfrp1","Col11a1","Acan","Crabp1","Rgs5","Acta2","Des"))
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(mu_int_fib_sub,features = c("Sfrp2","Dpp4","Apoe","Fmo1","Ccl19","Sfrp4","Sfrp1","Col11a1","Acan","Crabp1","Rgs5","Acta2","Des"))
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+```
+
+```{r, eval = FALSE}
+pdf("mu_int_fib_sub_dotplot_markers_RdBu.pdf", height = 8, width=5)
+p = DotPlot(mu_int_fib_sub,features = c("Sfrp2","Dpp4","Apoe","Fmo1","Ccl19","Sfrp4","Sfrp1","Col11a1","Acan","Crabp1","Rgs5","Acta2","Des"), cols = "RdBu")
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(mu_int_fib_sub,features = c("Sfrp2","Dpp4","Apoe","Fmo1","Ccl19","Sfrp4","Sfrp1","Col11a1","Acan","Crabp1","Rgs5","Acta2","Des"), cols = "RdBu")
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+```
+
+```{r}
+#joost annotations
+mu_int_metadata = read.table("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/mu_int_metadata.txt", sep="\t",row.names=1,header=T,stringsAsFactors = F)
+Idents(mu_int_fib) = "dataset"
+joost_cells = WhichCells(mu_int_fib, idents = "SJ")
+mu_int_fib$sj_anno_nomu = mu_int_metadata$sj_anno_nomu[match(colnames(mu_int_fib),rownames(mu_int_metadata))]
+Idents(mu_int_fib) = "sj_anno_nomu"
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_fib, cells = joost_cells)
+```
+
+```{r}
+ns_int_fib = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_fib.Rds")
+```
+
+```{r}
+Idents(ns_int_fib) = "integrated_snn_res.0.6"
+ident_order = c(0,4,11,2,3,6,10,12,1,5,8,9)
+ns_int_fib_sub = subset(ns_int_fib, idents = ident_order)
+levels(ns_int_fib_sub) = rev(ident_order)
+```
+
+```{r, eval = FALSE}
+pdf("ns_int_fib_sub_dotplot_markers.pdf", height = 8, width=5)
+p = DotPlot(ns_int_fib_sub,features = c("SFRP2","DPP4","APOE","FMO1","CCL19","SFRP4","SFRP1","COL11A1","ACAN","CRABP1","RGS5","ACTA2","DES"))
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(ns_int_fib_sub,features = c("SFRP2","DPP4","APOE","FMO1","CCL19","SFRP4","SFRP1","COL11A1","ACAN","CRABP1","RGS5","ACTA2","DES"))
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+```
+
+```{r, eval = FALSE}
+pdf("ns_int_fib_sub_dotplot_markers_RdBu.pdf", height = 8, width=5)
+p = DotPlot(ns_int_fib_sub,features = c("SFRP2","DPP4","APOE","FMO1","CCL19","SFRP4","SFRP1","COL11A1","ACAN","CRABP1","RGS5","ACTA2","DES"), cols = "RdBu")
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(ns_int_fib_sub,features = c("SFRP2","DPP4","APOE","FMO1","CCL19","SFRP4","SFRP1","COL11A1","ACAN","CRABP1","RGS5","ACTA2","DES"), cols = "RdBu")
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+```

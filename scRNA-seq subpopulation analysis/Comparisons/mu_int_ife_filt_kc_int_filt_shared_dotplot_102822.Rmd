@@ -1,0 +1,151 @@
+---
+title: "MU/HU IFE cell dotplots"
+author: "Larry Chen"
+date: "2023-01-17"
+output: html_document
+---
+
+For Figure 2i
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r}
+mu_int_ife_filt = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/mu_int_ife_filt.Rds")
+```
+
+```{r, eval = FALSE}
+Idents(mu_int_ife_filt) = "orig.ident"
+png("mu_int_ife_filt_labelby_orig.ident.png", units = "in", height = 5, width = 6, res=300)
+p1 <- DimPlot(mu_int_ife_filt, reduction = "umap")
+print(p1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_ife_filt, reduction = "umap")
+```
+
+```{r, eval = FALSE}
+Idents(mu_int_ife_filt) = "integrated_snn_res.0.4"
+order_ident = c(4,0,9,1,5,7,6,2,3,8)
+levels(mu_int_ife_filt) = rev(order_ident)
+pdf("mu_int_ife_filt_dotplot_markers.pdf", height = 8, width=5)
+p = DotPlot(mu_int_ife_filt,features = c("Col17a1","Itga6","Itgb4","Isg15","Pcna","Mki67","Krt1","Krt10","Klk7","Ivl"))
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(mu_int_ife_filt,features = c("Col17a1","Itga6","Itgb4","Isg15","Pcna","Mki67","Krt1","Krt10","Klk7","Ivl"))
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+```
+
+```{r, eval = FALSE}
+pdf("mu_int_ife_filt_dotplot_markers_RdBu.pdf", height = 8, width=5)
+p = DotPlot(mu_int_ife_filt,features = c("Col17a1","Itga6","Itgb4","Isg15","Pcna","Mki67","Krt1","Krt10","Klk7","Ivl"), cols = "RdBu")
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(mu_int_ife_filt,features = c("Col17a1","Itga6","Itgb4","Isg15","Pcna","Mki67","Krt1","Krt10","Klk7","Ivl"), cols = "RdBu")
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+```
+
+```{r, eval = FALSE}
+DimPlot(mu_int_ife_filt,group.by = "Phase")
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_ife_filt,group.by = "Phase")
+
+```
+
+```{r}
+kc_int_filt = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/kc_int_filt.Rds")
+```
+
+```{r, eval = FALSE}
+Idents(kc_int_filt) = "integrated_snn_res.0.4"
+res = 0.4
+png(paste("kc_int_filt_res_",res,"_noaxes_color_order_largelabel.png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+p=DimPlot(kc_int_filt, reduction="umap", label=T,label.size = 8, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p=DimPlot(kc_int_filt, reduction="umap", label=T,label.size = 8, pt.size = 0.25)
+p = p+NoAxes()
+print(p)
+```
+
+```{r, eval = FALSE}
+Idents(kc_int_filt) = "integrated_snn_res.0.4"
+ident_order = c(3,4,6,5,8,7,0,2,1,9,11,10)
+levels(kc_int_filt) = rev(ident_order)
+pdf("kc_int_filt_dotplot_markers.pdf", height = 8, width=5)
+p = DotPlot(kc_int_filt,features = c("COL17A1","ITGA6","ITGB4","PCNA","MKI67","KRT1","KRT10","KLK7","IVL"))
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(kc_int_filt,features = c("COL17A1","ITGA6","ITGB4","PCNA","MKI67","KRT1","KRT10","KLK7","IVL"))
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+```
+
+```{r, eval = FALSE}
+pdf("kc_int_filt_dotplot_markers_RdBu.pdf", height = 8, width=5)
+p = DotPlot(kc_int_filt,features = c("COL17A1","ITGA6","ITGB4","PCNA","MKI67","KRT1","KRT10","KLK7","IVL"), cols = "RdBu")
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p = DotPlot(kc_int_filt,features = c("COL17A1","ITGA6","ITGB4","PCNA","MKI67","KRT1","KRT10","KLK7","IVL"), cols = "RdBu")
+#p = p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p = p + RotatedAxis()
+print(p)
+```

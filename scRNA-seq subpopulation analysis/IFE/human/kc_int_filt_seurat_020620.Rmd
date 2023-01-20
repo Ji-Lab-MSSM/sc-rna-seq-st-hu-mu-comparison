@@ -1,0 +1,214 @@
+---
+title: "Creating kc_int_filt"
+author: "Larry Chen"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "/share/software/user/open/python/3.6.1/bin/python3")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(cowplot)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r, include = F}
+kc_int_filt = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/kc_int_filt.Rds')
+```
+
+## Import data
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_int")
+
+# Filter out cycling HF cells
+kc_int = readRDS("kc_int.Rds")
+Idents(kc_int) = "integrated_snn_res.0.6"
+```
+
+## Filter out cycling HF cells
+
+```{r, eval = FALSE}
+keep_cells = WhichCells(kc_int, idents = c(0,1,2,3,4,5,6,7,8,9,10,12,13))
+kc_int_filt = subset(kc_int,cells = keep_cells)
+DefaultAssay(kc_int_filt) <- "integrated"
+```
+
+## Clustering/finding neighbors
+
+```{r, eval = FALSE}
+kc_int_filt <- FindNeighbors(kc_int_filt, dims = 1:30, verbose = T)
+kc_int_filt <- FindClusters(kc_int_filt, resolution = 0.1, verbose = FALSE)
+kc_int_filt <- FindClusters(kc_int_filt, resolution = 0.15, verbose = FALSE)
+kc_int_filt <- FindClusters(kc_int_filt, resolution = 0.2, verbose = FALSE)
+kc_int_filt <- FindClusters(kc_int_filt, resolution = 0.25, verbose = FALSE)
+kc_int_filt <- FindClusters(kc_int_filt, resolution = 0.3, verbose = FALSE)
+kc_int_filt <- FindClusters(kc_int_filt, resolution = 0.4, verbose = FALSE)
+kc_int_filt <- FindClusters(kc_int_filt, resolution = 0.6, verbose = FALSE)
+kc_int_filt <- FindClusters(kc_int_filt, resolution = 0.8, verbose = FALSE)
+```
+
+## Scale/pca/umap
+
+```{r, eval = FALSE}
+kc_int_filt <- ScaleData(kc_int_filt, verbose = FALSE)
+kc_int_filt <- RunPCA(kc_int_filt, npcs = 30, verbose = FALSE)
+kc_int_filt <- RunUMAP(kc_int_filt, reduction = "pca", dims = 1:30)
+```
+
+## Plot umaps
+
+```{r, eval = FALSE}
+p1 <- DimPlot(kc_int_filt, reduction = "umap", group.by = "patient")
+p2 <- DimPlot(kc_int_filt, reduction = "umap", group.by = "subpop", label = TRUE, 
+    repel = TRUE) + NoLegend()
+p = plot_grid(p1, p2)
+
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_int/kc_int_filt/plots")
+png("kc_int_filt_pt7_labelbypatient_subpop.png", units = "in", height = 5, width = 10, res=300)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+p1 <- DimPlot(kc_int_filt, reduction = "umap", group.by = "patient")
+p2 <- DimPlot(kc_int_filt, reduction = "umap", group.by = "subpop", label = TRUE, 
+    repel = TRUE) + NoLegend()
+p = plot_grid(p1, p2)
+p
+```
+
+### Color by patient
+
+```{r, eval = FALSE}
+Idents(kc_int_filt) = "patient"
+patient_order = c("P1","P2","P5","P6","P7","P9","P10")
+Idents(kc_int_filt) = factor(x = Idents(kc_int_filt), levels = patient_order)
+```
+
+```{r, eval = FALSE}
+p <- DimPlot(kc_int_filt, reduction = "umap")
+png("kc_int_filt_pt7_labelbypatient.png", units = "in", height = 5, width = 6, res=300)
+print(p)
+dev.off()
+png("kc_int_filt_pt7_labelbypatient_nolabel.png", units = "in", height = 5, width = 5, res=300)
+p = p + NoLegend() + NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(kc_int_filt, reduction = "umap")
+```
+
+```{r, eval = FALSE}
+all_res = c(0.1,0.15,0.2,0.25,0.3,0.4,0.6,0.8)
+for (i in 1:length(all_res))
+{
+	res = all_res[i]
+	Idents(kc_int_filt) = paste("integrated_snn_res.",res,sep="")
+	png(paste("kc_int_filt_res",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+	p=DimPlot(kc_int_filt, reduction="umap", label=T, do.return = T, pt.size = 1)
+	print(p)
+	dev.off()
+}
+```
+
+```{r, echo = FALSE}
+Idents(kc_int_filt) = 'integrated_snn_res.0.4'
+DimPlot(kc_int_filt, reduction="umap", label=T, pt.size = 1)
+```
+
+```{r, eval = FALSE}
+DefaultAssay(kc_int_filt) <- "RNA"
+
+genes = c("ITGA6","ITGB1","ITGA2","ITGA3","ODC1","FOSL1","HAS3","PLAU","PHLDA1","PHLDA2","COL17A1","MMP10","PTHLH","MMP1","KRT1",
+  "MKI67","ZNF750","ASS1","POSTN","HELLS","RRM2","PTTG1","IVL","TGM3","LOR","SLURP1","CALML5","KRT14","KRT15","KRT5","WNT3",
+  "WNT4","WNT10A","DLL1","DKK3","JAG2","FGF7","FGFR2","FGFR3","NRP1","TGFBR1",
+  "TGFBR2","TGFB1","KRT6A","KRT6B","KRT6C","KRT16","HES1",
+  "MYC","ISG15","CXCL9","CXCL10","CXCL11", "CST6","KLK7")
+for (i in 1:length(genes))
+{
+  png(paste("kc_int_filt_",genes[i],"_noaxes_nolegend_pt1_order.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = kc_int_filt, features = genes[i], cols = c("lightgrey", "blue"), pt.size = 1, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = F}
+FeaturePlot(object = kc_int_filt, features = c('MKI67','COL17A1','KRT10'), cols = c("lightgrey", "blue"), pt.size = 1, order=T)
+```
+
+```{r, eval = FALSE}
+p1 <- DimPlot(kc_int_filt, reduction = "umap", group.by = "Phase")
+png("kc_int_filt_pt7_cc_phase.png", units = "in", height = 5, width = 5, res=300)
+print(p1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(kc_int_filt, reduction = "umap", group.by = "Phase")
+```
+
+### UMAP \@ res 0.4
+
+```{r, eval = FALSE}
+print(table(kc_int_filt@meta.data[,"integrated_snn_res.0.4"],kc_int_filt@meta.data[,"patient"]))
+
+Idents(kc_int_filt) = "integrated_snn_res.0.4"
+p <- DimPlot(kc_int_filt, reduction = "umap", pt.size=0.5)
+png("kc_int_filt_res0.4_nolabel_pt0.5.png", units = "in", height = 5, width = 5, res=300)
+p = p + NoLegend() + NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(kc_int_filt, reduction = "umap", pt.size=0.5)
+```
+
+## Find All Markers
+
+```{r, eval = FALSE}
+Idents(kc_int_filt) = "integrated_snn_res.0.4"
+markers <- FindAllMarkers(kc_int_filt, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj <0.05)
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_int/kc_int_filt")
+write.table(markers.filt,file="kc_int_filt_seurat_markers_res0.4.txt",sep = "\t",row.names = T,col.names = T)
+```
+
+## Save metadata
+
+```{r, eval = FALSE}
+kc_int_data = as.matrix(kc_int_filt@meta.data)
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_int/kc_int_filt")
+write.table(kc_int_data,file="kc_int_filt_metadata.txt",sep = "\t",row.names = T,col.names = T)
+```
+
+## Save object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/merge12ptsnew_kc/kc_norm/kc_int/kc_int_filt")
+saveRDS(kc_int_filt,file="kc_int_filt.Rds")
+```

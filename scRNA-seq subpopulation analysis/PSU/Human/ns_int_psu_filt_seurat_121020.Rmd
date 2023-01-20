@@ -1,0 +1,242 @@
+---
+title: "Filtering human PSU cells"
+author: "Larry Chen"
+date: "2023-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-load, include = FALSE}
+#ns_int_psu_filt = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_psu_filt.Rds")
+```
+
+## Load Object
+
+```{r, eval = FALSE}
+ns_int_psu_noecc = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int_psu_noecc.Rds")
+DefaultAssay(ns_int_psu_noecc) = "RNA"
+```
+
+## Filter Out Fibroblasts
+
+We filter out a cluster of Fibroblast cells, which were identified when we ran Seurat's clustering algorithm on the RNA assay, \@ resolution 0.6. This process is outlined in the 'ns_int_psu_noecc_trad_norm_121020' markdown.
+
+```{r, eval = FALSE}
+Idents(ns_int_psu_noecc) = "RNA_snn_res.0.6"
+
+# Filter out cluster 5, which are fibroblasts
+ns_int_psu_filt = subset(ns_int_psu_noecc, idents = c(0:4,6:17))
+```
+
+## Split object/selecting samples
+
+Only keeping samples with more than 84 cells.
+
+```{r, eval = FALSE}
+ns.list <- SplitObject(ns_int_psu_filt, split.by = "sample")
+
+x=which(table(ns_int_psu_filt$sample)>84)
+sample_keep = names(table(ns_int_psu_filt$sample)[x])
+
+# sample_keep = c("abd4", "br41epi", "br53epi", "P1", "P10", "P2", "P5", "P6", "P3",
+# "P7", "P9", "rt1","rt2", "s11", "SC1control", "SC18control", "SC32control", "SC33control", "SC34control", "SC4control","scalp26", 
+# "scalp32")
+```
+
+## Preprocessing
+
+```{r, eval = FALSE}
+ns.list = ns.list[sample_keep]
+
+for (i in 1:length(ns.list)) {
+    ns.list[[i]] <- NormalizeData(ns.list[[i]], verbose = FALSE)
+    ns.list[[i]] <- FindVariableFeatures(ns.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+}
+```
+
+## Integration
+
+```{r, eval = FALSE}
+reference.list <- ns.list
+ns.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30, k.filter = 85)
+
+ns_int_psu_filt <- IntegrateData(anchorset = ns.anchors, dims = 1:30)
+```
+
+```{r, eval = FALSE}
+DefaultAssay(ns_int_psu_filt) <- "integrated"
+ns_int_psu_filt <- ScaleData(ns_int_psu_filt, verbose = FALSE)
+ns_int_psu_filt <- RunPCA(ns_int_psu_filt, npcs = 30, verbose = FALSE)
+ns_int_psu_filt <- RunUMAP(ns_int_psu_filt, reduction = "pca", dims = 1:30)
+```
+
+## Clustering
+
+```{r, eval = FALSE}
+ns_int_psu_filt <- FindNeighbors(ns_int_psu_filt, dims = 1:30, verbose = T)
+ns_int_psu_filt <- FindClusters(ns_int_psu_filt, resolution = 0.1, verbose = FALSE)
+#ns_int_psu_filt <- FindClusters(ns_int_psu_filt, resolution = 0.15, verbose = FALSE)
+ns_int_psu_filt <- FindClusters(ns_int_psu_filt, resolution = 0.2, verbose = FALSE)
+#ns_int_psu_filt <- FindClusters(ns_int_psu_filt, resolution = 0.25, verbose = FALSE)
+#ns_int_psu_filt <- FindClusters(ns_int_psu_filt, resolution = 0.3, verbose = FALSE)
+ns_int_psu_filt <- FindClusters(ns_int_psu_filt, resolution = 0.4, verbose = FALSE)
+ns_int_psu_filt <- FindClusters(ns_int_psu_filt, resolution = 0.6, verbose = FALSE)
+ns_int_psu_filt <- FindClusters(ns_int_psu_filt, resolution = 0.8, verbose = FALSE)
+```
+
+## UMAPS
+
+### By orig.ident
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu/ns_int_psu_filt/plots")
+
+png("ns_int_psu_filt_labelby_origident.png", units = "in", height = 5, width = 7, res=300)
+DimPlot(ns_int_psu_filt, reduction="umap", do.label=F, group.by = "orig.ident", do.return = T, pt.size = 0.25)
+dev.off()
+```
+
+### By sample
+
+```{r, eval = FALSE}
+png("ns_int_psu_filt_labelby_sample.png", units = "in", height = 5, width = 7, res=300)
+DimPlot(ns_int_psu_filt, reduction="umap", do.label=F, group.by = "sample", do.return = T, pt.size = 0.25)
+dev.off()
+```
+
+### By integrated_snn_res.0.2
+
+```{r, eval = FALSE}
+png("ns_int_psu_filt_res.0.2.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_filt, reduction="umap", label=T, group.by = "integrated_snn_res.0.2", pt.size = 0.1)
+dev.off()
+```
+
+### By integrated_snn_res.0.4
+
+```{r, eval = FALSE}
+png("ns_int_psu_filt_res.0.4.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_filt, reduction="umap", label=T,  group.by = "integrated_snn_res.0.4", pt.size = 0.1)
+dev.off()
+```
+
+### By integrated_snn_res.0.6
+
+```{r, eval = FALSE}
+png("ns_int_psu_filt_res.0.6.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_filt, reduction="umap", label=T,  group.by = "integrated_snn_res.0.6", pt.size = 0.1)
+dev.off()
+```
+
+### By integrated_snn_res.0.8
+
+```{r, eval = FALSE}
+png("ns_int_psu_filt_res.0.8.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_filt, reduction="umap", label=T, group.by = "integrated_snn_res.0.8", pt.size = 0.1)
+dev.off()
+```
+
+### By integrated_snn_res.1
+
+```{r, eval = FALSE}
+png("ns_int_psu_filt_res.1.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(ns_int_psu_filt, reduction="umap", label=T, group.by = "integrated_snn_res.1", pt.size = 0.1)
+dev.off()
+```
+
+### By nCount_RNA
+
+```{r, eval = FALSE}
+png("ns_int_psu_filt_nUMI.png", units = "in", height = 5, width = 5, res=300)
+p=FeaturePlot(object = ns_int_psu_filt, features = "nCount_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+p = p + NoAxes()
+print(p)
+dev.off()
+```
+
+### By nFeature_RNA
+
+```{r, eval = FALSE}
+png("ns_int_psu_filt_nFeature.png", units = "in", height = 5, width = 5, res=300)
+p=FeaturePlot(object = ns_int_psu_filt, features = "nFeature_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+p = p + NoAxes()
+print(p)
+dev.off()
+```
+
+## Feature plots
+
+```{r, eval = FALSE}
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD163","CD207",
+  "CD3E","MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1",
+  "KRT23","KRT25","KRT6A","KRT16","KRT17","PPARG","DIO2","COMP","FGF7","COL17A1","TP63","PTN","SAT1","SOX4","KLF5","TNC",
+  "PTHLH","MT1X","MT1G","MT1H","MT1E","SFRP1","DMKN","ZNF750","IVL","SOSTDC1","FGF18","IL37","IL1F10","IL36RN","IL1RN",
+  "MDK","LGALS1","CD151","ITGB1","MKI67","LUM","COL6A1","SOX2","DHRS9","LCE1E","PIP",
+  "S100P","MMP7","KRT77","FZD10","PCDH19","DLX3","ANGPTL7","PARM1","KRT8","KRT18","CD200","CD59","FST",
+  "MSX2","BARX2","IL11RA","LGR5","LGR6","FGF5","EDN2","CST6","KRT79", "CD34","PTN",
+  "RUNX3","HAS1","RUNX2","GJB6","GJB2","AQP5","KRT7","TMEM213","KIF12","TSPAN18","MFAP2","CLDN10","FAM13A","ID1","ID3",
+  "KRT7","TMEM213","KRT75","TP63","SOX2","CORIN","PROM1","NRG2","CNTN1","ENPP1","DACT1","SBSPON","BDNF")
+genes_match = genes[genes %in% rownames(ns_int_psu_filt)]
+DefaultAssay(ns_int_psu_filt) = 'RNA'
+for (i in 1:length(genes_match))
+{
+  png(paste("ns_int_psu_filt_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = ns_int_psu_filt, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+DefaultAssay(ns_int_psu_filt) = 'integrated'
+```
+
+## QC violin plot
+
+```{r, eval = FALSE}
+pdf("ns_int_psu_filt_nCount_Feature.pdf",height=4,width=6)
+VlnPlot(ns_int_psu_filt,features = c("nCount_RNA","nFeature_RNA"), group.by = "sample")
+dev.off()
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/ns_int/ns_int_psu/ns_int_psu_filt/")
+saveRDS(ns_int_psu_filt, file="ns_int_psu_filt.Rds") 
+```
+
+## Find Markers
+
+```{r, eval = FALSE}
+Idents(ns_int_psu_filt) = "integrated_snn_res.0.8"
+markers <- FindAllMarkers(ns_int_psu_filt, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+write.table(markers.filt, file = "ns_int_psu_filt_seurat_markers_res0.8.csv",sep = ",",row.names = T, col.names=T)
+```

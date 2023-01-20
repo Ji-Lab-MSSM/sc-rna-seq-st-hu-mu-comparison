@@ -1,0 +1,142 @@
+---
+title: "Mapping scRNA-seq based cell predictions onto Spatial Transcriptomic data"
+author: "Larry Chen"
+date: "2023-01-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v4.1.1. You will need to install seurat version 4.1.1 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat4.1.0, eval = FALSE}
+remotes::install_version('Seurat', version = '4.1.1', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages/Seurat 4.1.1" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages/Seurat 4.1.1")
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+## Load ST object
+
+```{r}
+n23_p1 = readRDS('C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/st/n23_p1.Rds')
+```
+
+## Load Predictions
+
+From n23_p1_seurat_prediction_merged_confident_CT_020621.Rmd
+
+```{r}
+# Load in ns_int predictions
+n23p1_prediction.ns_int = read.table("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/st/n23p1_predictions_ns_int_res0.6_ref.txt",
+                              sep = "\t",row.names = 1,header=T,stringsAsFactors = F)
+
+#filter out predictions for spots that were removed
+n23_p1_prediction.ns_int_filtered = n23p1_prediction.ns_int[match(colnames(n23_p1),row.names(n23p1_prediction.ns_int)),]
+```
+
+```{r}
+n23_p1$predicted.id = n23_p1_prediction.ns_int_filtered$predicted.id
+Idents(n23_p1) = 'predicted.id'
+SpatialDimPlot(n23_p1, images = "rep2")
+```
+
+## Feature and Violin Plots
+
+```{r, eval = FALSE}
+for (i in 2:42)
+{
+  id_title = colnames(n23p1_prediction)[i]
+  n23_p1@meta.data$pred = as.numeric(n23p1_prediction[,i])
+  p = SpatialFeaturePlot(n23_p1,features = "pred")
+  png(paste("n23p1_stfeatureplot_",id_title,".png",sep=""),width = 12, height=4, units = "in", res = 300)
+  print(p)
+  dev.off()
+  p2 = VlnPlot(n23_p1,features = "pred",group.by = "SCT_snn_res.0.8")
+  pdf(paste("n23p1_vlnplot_res0.8_",id_title,".pdf",sep=""),width = 6, height=4)
+  print(p2)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+id_title = 'prediction.score.ns_int_res0.6_C2'
+n23_p1@meta.data$pred = as.numeric(n23_p1_prediction.ns_int_filtered[,id_title])
+print(id_title)
+p = SpatialFeaturePlot(n23_p1,features = "pred", images = 'rep2')
+print(p + plot_annotation(title = id_title))
+```
+
+```{r, echo = FALSE}
+id_title = 'prediction.score.ns_int_res0.6_C4'
+n23_p1@meta.data$pred = as.numeric(n23_p1_prediction.ns_int_filtered[,id_title])
+print(id_title)
+p = SpatialFeaturePlot(n23_p1,features = "pred", images = 'rep2')
+print(p + plot_annotation(title = id_title))
+```
+
+```{r, echo = FALSE}
+id_title = 'prediction.score.ns_int_res0.6_C20'
+n23_p1@meta.data$pred = as.numeric(n23_p1_prediction.ns_int_filtered[,id_title])
+print(id_title)
+p = SpatialFeaturePlot(n23_p1,features = "pred", images = 'rep2')
+print(p + plot_annotation(title = id_title))
+```
+
+## Add IFE/PSU designations to object
+
+IFE/PSU designations made based on histology
+
+```{r, eval = FALSE}
+#############
+# Check IFE PSU 
+# Get IFE/PSU designations and add to each object
+n23_p1 = subset(n23_p1, nCount_Spatial > 200)
+
+spot_pos1 = read.table(paste(vis.dir,"IFE_PSU.csv",sep=""),sep = ",",row.names = 1,header = T,stringsAsFactors = F)
+spot_pos2 = read.table(paste(vis.dir2,"IFE_PSU.csv",sep=""),sep = ",",row.names = 1,header = T,stringsAsFactors = F)
+pos1_names = paste("rep1_",rownames(spot_pos1),sep="")
+pos2_names = paste("rep2_",rownames(spot_pos2),sep="")
+
+rownames(spot_pos1) = pos1_names
+rownames(spot_pos2) = pos2_names
+
+n23_p1_ifepsu = rep("Other",ncol(n23_p1))
+n23_p1_ifepsu_rep1_match = match(rownames(spot_pos1),colnames(n23_p1))
+n23_p1_ifepsu_rep1_match_filt = n23_p1_ifepsu_rep1_match[which(!is.na(n23_p1_ifepsu_rep1_match))]
+n23_p1_ifepsu[n23_p1_ifepsu_rep1_match_filt] = spot_pos1[,1]
+n23_p1_ifepsu_rep2_match = match(rownames(spot_pos2),colnames(n23_p1))
+n23_p1_ifepsu_rep2_match_filt = n23_p1_ifepsu_rep2_match[which(!is.na(n23_p1_ifepsu_rep2_match))]
+n23_p1_ifepsu[n23_p1_ifepsu_rep2_match_filt] = spot_pos2[,1]
+
+n23_p1$IFE_PSU = n23_p1_ifepsu
+```
+
+```{r, eval = FALSE}
+Idents(n23_p1) = 'IFE_PSU'
+png(paste("n23_p1_IFE_PSU_check.png",sep=""), units = "in", height = 5, width = 10, res=300)
+p=SpatialDimPlot(n23_p1)
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(n23_p1) = 'IFE_PSU'
+SpatialDimPlot(n23_p1)
+```

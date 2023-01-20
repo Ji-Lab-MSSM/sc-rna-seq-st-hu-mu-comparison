@@ -1,0 +1,360 @@
+---
+title: "Creating mu_int/Integrating Mouse Data"
+author: "Larry Chen"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package. 
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-load, include = FALSE}
+mu_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/mu_all_int.Rds")
+```
+
+## Read in haensel data
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/haensel_data/analysis/all_merge")
+
+dh_all = c("uw1","uw2","wo1","wo2","wo3")
+all_data = list()
+for (i in 1:length(dh_all))
+{
+  data_dir = paste("/oak/stanford/groups/khavari/users/andrewji/mouse_skin/haensel_data/",dh_all[i],sep="")
+  list.files(data_dir)
+  data = Read10X(data.dir = data_dir)
+  #data = Read10X_h5(paste("~/Dropbox/Haensel_Mouse/data/",dh_mouse[i],"_filtered_feature_bc_matrix.h5",sep=""),use.names=TRUE,unique.features = TRUE)
+  all_data[[i]] = data
+}
+```
+
+### Create seurat object from haensel data
+
+```{r, eval = FALSE}
+allnames = dh_all
+all_obj = list()
+for (i in 1:length(all_data))
+{
+  obj <- CreateSeuratObject(counts = all_data[[i]], project = allnames[i])
+  all_obj[[i]] = obj
+}
+```
+
+### subset by percent.mt \< 10
+
+```{r, eval = FALSE}
+dh_all <- merge(all_obj[[1]], y = unlist(all_obj[2:5]), add.cell.ids = allnames, project = "dh_all")
+
+dh_all[["percent.mt"]] <- PercentageFeatureSet(dh_all, pattern = "^mt-")
+
+dh_all = subset(dh_all, percent.mt < 10)
+```
+
+## Process joost_main data
+
+### Read In raw data
+
+```{r, eval = FALSE}
+joost_main_names = c("5w","9w")
+
+all_data = list()
+for (i in 1:length(joost_main_names))
+{
+  data_dir = paste("/oak/stanford/groups/khavari/users/andrewji/mouse_skin/joost_data/",joost_main_names[i],"_main/",sep="")
+  list.files(data_dir)
+  data = Read10X(data.dir = data_dir)
+  #data = Read10X_h5(paste("~/Dropbox/Haensel_Mouse/data/",dh_mouse[i],"_filtered_feature_bc_matrix.h5",sep=""),use.names=TRUE,unique.features = TRUE)
+  all_data[[i]] = data
+}
+```
+
+### create seurat objects
+
+```{r, eval = FALSE}
+allnames = joost_main_names
+all_obj = list()
+for (i in 1:length(all_data))
+{
+  obj <- CreateSeuratObject(counts = all_data[[i]], project = allnames[i])
+  all_obj[[i]] = obj
+}
+```
+
+### merge seurat objects
+
+```{r, eval = FALSE}
+joost_main <- merge(all_obj[[1]], y = all_obj[[2]], add.cell.ids = allnames, project = "joost_main")
+```
+
+## Process joost_val data
+
+### Read In raw data
+
+```{r, eval = FALSE}
+joost_val = c("GSM4186888_10X_19_067","GSM4186889_10X_19_069","GSM4186890_10X_19_071",
+              "GSM4186891_10X_19_068","GSM4186892_10X_19_070","GSM4186893_10X_19_072")
+
+all_data = list()
+for (i in 1:length(joost_val))
+{
+  #data_dir = paste("/home/andrewji/10x_data/",joost_samples[i],"/outs/filtered_feature_bc_matrix/",sep="")
+  #list.files(data_dir)
+  #data = Read10X(data.dir = data_dir)
+  data = Read10X_h5(paste("~/Dropbox/Joost_Mouse/Joost_2020/data/",joost_val[i],"_filtered_feature_bc_matrix.h5",sep=""),use.names=TRUE,unique.features = TRUE)
+  all_data[[i]] = data
+}
+```
+
+### create seurat objects
+
+```{r, eval = FALSE}
+allnames = c("5wk1","5wk2","5wk3","9wk1","9wk2","9wk3")
+all_obj = list()
+for (i in 1:length(all_data))
+{
+  obj <- CreateSeuratObject(counts = all_data[[i]], project = allnames[i])
+  all_obj[[i]] = obj
+}
+```
+
+### merge seurat objects
+
+```{r, eval = FALSE}
+joost_val <- merge(all_obj[[1]], y = unlist(all_obj[2:6]), add.cell.ids = allnames, project = "joost_val")
+```
+
+### save Joost validation seurat object
+
+```{r, eval = FALSE}
+setwd("~/Dropbox/Joost_Mouse/Joost_2020/data/")
+saveRDS(joost_val,file="mu_skin_val.Rds")
+```
+
+## combine Joost validation with Joost Main data
+
+```{r, eval = FALSE}
+joost_val = readRDS("/oak/stanford/groups/khavari/users/andrewji/mouse_skin/joost_data/mu_skin_val.Rds")
+allnames = c("main","val")
+joost_all <- merge(joost_main, y = joost_val, add.cell.ids = allnames, project = "joost_all")
+```
+
+### filter out cells by percent.mt \< 10
+
+```{r, eval = FALSE}
+joost_all[["percent.mt"]] <- PercentageFeatureSet(joost_all, pattern = "^mt-")
+
+joost_all = subset(joost_all, percent.mt < 10)
+```
+
+## Merge Haensel and Joost data
+
+```{r, eval = FALSE}
+allnames = c("DH","SJ")
+mu_all <- merge(dh_all, y = joost_all, add.cell.ids = allnames, project = "mu_all")
+```
+
+## Process full dataset
+
+### normalize/find variable features
+
+```{r, eval = FALSE}
+mu.list <- SplitObject(mu_all, split.by = "orig.ident")
+# Only non-wounded normal skin
+mu.list <- mu.list[c("uw1", "uw2", "5w", "5wk1","5wk2","5wk3","9w","9wk1","9wk2","9wk3")]
+for (i in 1:length(mu.list)) {
+    mu.list[[i]] <- NormalizeData(mu.list[[i]], verbose = FALSE)
+    mu.list[[i]] <- FindVariableFeatures(mu.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+}
+```
+
+### Integrate
+
+```{r, eval = FALSE}
+reference.list <- mu.list
+mu.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30)
+
+mu_int <- IntegrateData(anchorset = mu.anchors, dims = 1:30)
+DefaultAssay(mu_int) <- "integrated"
+```
+
+### Scale/PCA/UMAP
+
+```{r, eval = FALSE}
+mu_int <- ScaleData(mu_int, verbose = FALSE)
+mu_int <- RunPCA(mu_int, npcs = 30, verbose = FALSE)
+mu_int <- RunUMAP(mu_int, reduction = "pca", dims = 1:30)
+```
+
+### Clustering
+
+```{r, eval = FALSE}
+mu_int <- FindNeighbors(mu_int, dims = 1:30, verbose = T)
+mu_int <- FindClusters(mu_int, resolution = 0.1, verbose = FALSE)
+#mu_int <- FindClusters(mu_int, resolution = 0.15, verbose = FALSE)
+mu_int <- FindClusters(mu_int, resolution = 0.2, verbose = FALSE)
+#mu_int <- FindClusters(mu_int, resolution = 0.25, verbose = FALSE)
+#mu_int <- FindClusters(mu_int, resolution = 0.3, verbose = FALSE)
+mu_int <- FindClusters(mu_int, resolution = 0.4, verbose = FALSE)
+mu_int <- FindClusters(mu_int, resolution = 0.6, verbose = FALSE)
+mu_int <- FindClusters(mu_int, resolution = 0.8, verbose = FALSE)
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/")
+saveRDS(mu_int, file="mu_all_int.Rds") 
+```
+
+## assign labels to samples
+
+```{r, eval = FALSE}
+# Label by Anagen and Telogen
+Idents(mu_int) = "orig.ident"
+dput(levels(Idents(mu_int)))
+clus = c("uw1", "uw2", "5w", "5wk1", "5wk2", "5wk3", 
+"9w", "9wk1", "9wk2","9wk3")
+clus_names = c(rep("DH",2),rep("SJ",8))
+clus_names2 = c(rep("NA",2),"Main","Val","Val","Val","Main","Val","Val","Val")
+tel_ana_names = c(rep("NA",2),rep("ANA",4),rep("TEL",4))
+dataset = rep("x",ncol(mu_int))
+tel_ana = rep("x",ncol(mu_int))
+main_val = rep("x",ncol(mu_int))
+for (i in 1:length(clus))
+{
+  cells = WhichCells(mu_int, idents = clus[i])
+  dataset[match(cells,colnames(mu_int))] = clus_names[i]
+  main_val[match(cells,colnames(mu_int))] = clus_names2[i]
+  tel_ana[match(cells,colnames(mu_int))] = tel_ana_names[i]
+}
+```
+
+```{r, eval = FALSE}
+mu_int$dataset = dataset
+
+mu_int$hf_cycle = tel_ana
+mu_int$main_val = main_val
+```
+
+## Graphing
+
+### UMAPS
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/plots")
+
+png("mu_int_labelbysample.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int, reduction = "umap", group.by = "orig.ident")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int, reduction = "umap", group.by = "orig.ident")
+```
+
+```{r, eval = FALSE}
+png("mu_int_groupby_dataset.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int, reduction="umap", label=T, group.by = "dataset", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int, reduction="umap", label=T, group.by = "dataset", pt.size = 0.1)
+```
+
+```{r, eval = FALSE}
+png("mu_int_groupby_mainval.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int, reduction="umap", label=T, group.by = "main_val", pt.size = 0.25)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int, reduction="umap", label=T, group.by = "main_val", pt.size = 0.25)
+```
+
+```{r, eval = FALSE}
+png("mu_int_groupby_hfcycle.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int, reduction="umap", label=T, group.by = "hf_cycle", pt.size = 0.25)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int, reduction="umap", label=T, group.by = "hf_cycle", pt.size = 0.25)
+```
+
+#### UMAPS colored by cluster resolutions
+
+```{r, eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8)
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(mu_int) = paste("integrated_snn_res.",res,sep="")
+  png(paste("mu_int_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(mu_int, reduction="umap", label=T, do.return = T, pt.size = 0.1)
+  print(p)
+  dev.off()
+}
+```
+
+### Feature Plots
+
+```{r, eval = FALSE}
+genes = c("Krt14", "Krt5", "Krt1", "Krt10", "Lhx2", "Krt19", 
+"Azgp1", "Krt15", "Sox9", "Cd14", "Cd207", "Cd3e", "Mlana", "Vwf", 
+"Col1a1", "S100a8", "S100a9", "Clec9a", "Mgst1", "Apoe", 
+"Xcl1", "Mki67", "Ccr7", "Ccl19", "Sele", "Dio2", "Wif1", "Krt15", 
+"Col17a1", "Flg", "Cd34", "Itga6", "Col17a1", "Itgb1", "Itgb4", 
+"Barx2", "Msx2", "Krt25", "Krt27", "Krt71", "Krt79", "Pthlh", 
+"Lgr5", "Lgr6", "Cst6", "Fgf5", "Krt31", "Sparc", "Dcn", "Corin", 
+"Sfrp1", "Edn2", "Tagln","Des","Myh9","Krt35","Acta1",
+"Ptn","Sostdc1","Dkk3","Tnc","Sfrp2","Lamb3", "Itgam","Itgax","Ptn","Sostdc1",
+"Fcgbp","H2-M2","Epgn","Ivl","H2-Aa","Cd74","S100a1","Them5","Calml3",
+"Sbsn","Dmkn","Nog","Tspan2","Grem1","Aqp5","Fgf18","Il11ra1",
+"Il31ra","Mfap2","Cldn10","Fam13a","Mt1","Mt2","Mmp10","Pthlh","Tnc","Mdk","Lgals1")
+#genes = "MT-CYB"
+
+genes_match = genes[genes %in% rownames(mu_int)]
+
+for (i in 1:length(genes_match))
+{
+  png(paste("mu_int_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = mu_int, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+## Find All Markers
+
+```{r, eval = FALSE}
+Idents(mu_int) = "integrated_snn_res.0.4"
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/")
+markers <- FindAllMarkers(mu_int, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+write.table(markers.filt, file = "mu_int_seurat_markers_res0.4.csv",sep = ",",row.names = T, col.names=T)
+```

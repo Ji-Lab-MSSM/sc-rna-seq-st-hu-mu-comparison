@@ -1,0 +1,243 @@
+---
+title: "Mouse Regression of Gene Expression over Pseudotime"
+author: "Larry Chen"
+date: "2022-12-27"
+output: html_document
+---
+
+This R Markdown file takes in mouse data after diffusion pseudotime has been calculated, and uses Monocle3's differential expression tools to apply generalized linear regression models to the expression of each gene as a function of diffusion pseudotime.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import-libraries, message = FALSE}
+library(monocle3)
+library(Seurat)
+library(SeuratData)
+library(SeuratDisk)
+library(SeuratWrappers)
+library(ggplot2)
+library(patchwork)
+library(magrittr)
+library(dplyr)
+library(tibble)
+library(anndata)
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(circlize)
+library(data.table)
+library(sessioninfo)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+# IMPORTING DATA
+
+## Count Matrix
+
+```{r read-counts}
+#read in count matrix
+mu_rna_concat_ag_X_raw <- fread("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_concat_ag_raw_X.csv")
+mu_rna_concat_ag_X_raw = mu_rna_concat_ag_X_raw[-1,-1]
+```
+
+## Metadata
+
+```{r read-metadata}
+#read in metadata
+mu_rna_concat_ag_obs <- read.csv("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_concat_ag_obs.csv")
+mu_rna_concat_ag_var <- read.csv("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_concat_ag_var.csv")
+mu_rna_concat_ag_pca <- read.csv("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_concat_ag_pca.csv")
+mu_rna_concat_ag_umap <- read.csv("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_concat_ag_umap.csv")
+mu_rna_raw_ag_var <- read.csv("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_raw_ag_var.csv")
+```
+
+# CONSTRUCTING SEURAT OBJECT
+
+## Cleaning metadata
+
+```{r cleaning-metadata}
+#setting rownames for obs and var and getting rid of redundant rowname column
+rownames(mu_rna_concat_ag_obs) = mu_rna_concat_ag_obs$X
+mu_rna_concat_ag_obs = subset(mu_rna_concat_ag_obs, select = -c(X))
+rownames(mu_rna_concat_ag_var) = mu_rna_concat_ag_var$X
+mu_rna_concat_ag_var = subset(mu_rna_concat_ag_var, select= -c(X))
+```
+
+## Cleaning dimensional reductions
+
+```{r cleaning-dim-reduc}
+#deleting rownames for umap and pca, setting colnames, converting to matrices
+mu_rna_concat_ag_pca_df = mu_rna_concat_ag_pca[,c(2:ncol(mu_rna_concat_ag_pca))]
+for (i in 1:ncol(mu_rna_concat_ag_pca_df)){
+  colnames(mu_rna_concat_ag_pca_df)[i] = paste0("X_pca",i)
+}
+rownames(mu_rna_concat_ag_pca_df) = rownames(mu_rna_concat_ag_obs)
+mu_rna_concat_ag_pca_mat = data.matrix(mu_rna_concat_ag_pca_df, rownames.force = NA)
+
+mu_rna_concat_ag_umap_df = mu_rna_concat_ag_umap[,c(2:ncol(mu_rna_concat_ag_umap))]
+colnames(mu_rna_concat_ag_umap_df) = c("X_umap1","X_umap2")
+rownames(mu_rna_concat_ag_umap_df) = rownames(mu_rna_concat_ag_obs)
+mu_rna_concat_ag_umap_mat = data.matrix(mu_rna_concat_ag_umap_df, rownames.force = NA)
+```
+
+## Cleaning raw count matrix
+
+```{r cleaning-counts}
+#adding row and colnames to X
+mu_rna_concat_ag_X <- t(mu_rna_concat_ag_X_raw)
+colnames(mu_rna_concat_ag_X) = rownames(mu_rna_concat_ag_obs)
+rownames(mu_rna_concat_ag_X) = mu_rna_raw_ag_var$X
+```
+
+## Subsetting raw count matrix for expressed genes
+
+mu_rna_concat_ag_X has all the genes, but mu_rna_concat_ag_var only contains genes that were expressed in at least 1 cell.
+
+```{r subset-counts}
+#subset by genes that are expressed in at least one cell 
+mu_rna_concat_ag_X = mu_rna_concat_ag_X[rownames(mu_rna_concat_ag_var),]
+```
+
+## Creating Seurat Object
+
+```{r create-seurat}
+#create seurat object
+mu_rna_concat_ag = CreateSeuratObject(counts = mu_rna_concat_ag_X)
+```
+
+```{r add-metadata}
+#add metadata to seurat object
+mu_rna_concat_ag <- AddMetaData(
+  object = mu_rna_concat_ag,
+  metadata = mu_rna_concat_ag_obs)
+```
+
+```{r add-dim-reduc}
+#add dimensional reductions to object
+mu_rna_concat_ag[['umap']] <- CreateDimReducObject(embeddings = mu_rna_concat_ag_umap_mat, key = "umap_", assay = 'RNA')
+mu_rna_concat_ag[['pca']] <- CreateDimReducObject(embeddings = mu_rna_concat_ag_pca_mat, key = "pca_", assay = 'RNA')
+```
+
+## Pseudotime Binning
+
+```{r pseudo-binning}
+#add pseudotime binning (to be used in downstream analysis)
+binner <- function(x) {
+  if(x >= 0 & x < 0.1){
+    return(1)
+  }
+  if (x > 0.1 & x < 0.2){
+    return(2)
+  }
+  if (x > 0.2 & x < 0.3){
+    return(3)
+  }
+  if (x > 0.3 & x < 0.4){
+    return(4)
+  }
+  if (x > 0.4 & x < 0.5){
+    return(5)
+  }
+  if (x > 0.5 & x < 0.6){
+    return(6)
+  }
+  if (x > 0.6 & x < 0.7){
+    return(7)
+  }
+  if (x > 0.7 & x < 0.8){
+    return(8)
+  }
+  if (x > 0.8 & x < 0.9){
+    return(9)
+  }
+  if (x > 0.9 & x <= 1){
+    return(10)
+  }
+}
+dpt_bins = sapply(mu_rna_concat_ag$dpt_pseudotime,binner)
+mu_rna_concat_ag$dpt_bin = dpt_bins
+```
+
+## Saving Seurat object
+
+```{r save-seurat, eval = FALSE}
+#save seurat object as RDS
+saveRDS(mu_rna_concat_ag, "C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_concat_ag.Rds")
+```
+
+## QC
+
+```{r qc}
+#show umap embeddings and pseudotime to make sure import went well 
+mu_rna_concat_ag = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_concat_ag.Rds")
+Idents(mu_rna_concat_ag) = "subcell"
+DimPlot(mu_rna_concat_ag, reduction = "umap")
+FeaturePlot(mu_rna_concat_ag, features = "dpt_pseudotime")
+```
+
+# MONOCLE3 REGRESSION ANALYSIS
+
+## Converting Seurat Object into CDS object
+
+```{r convert-to-monocle}
+#monocle analysis
+mu_rna_concat_ag_cds <- as.cell_data_set(mu_rna_concat_ag)
+mu_rna_concat_ag_cds <- detect_genes(mu_rna_concat_ag_cds)
+```
+
+## Preprocessing
+
+```{r mono-preprocess}
+#preprocess
+mu_rna_concat_ag_cds <- preprocess_cds(mu_rna_concat_ag_cds, num_dim = 50)
+mu_rna_concat_ag_cds <- align_cds(mu_rna_concat_ag_cds, alignment_group = "orig.ident")
+```
+
+## Model fitting
+
+This step is very resource intensive.
+
+```{r model-fitting, eval = FALSE}
+#model fitting
+gene_fits <- fit_models(mu_rna_concat_ag_cds, model_formula_str = "~dpt_pseudotime")
+fit_coefs <- coefficient_table(gene_fits)
+dpt_time_terms <- fit_coefs %>% filter(term == "dpt_pseudotime")
+```
+
+# SAVING RESULTS
+
+## Filtering for significant results
+```{r import-results, include = FALSE}
+mu_ag_sig_reg_results = read.csv("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_ag_sig_reg_results.csv", row.names = 1)
+mu_ag_reg_results = read.csv("C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_ag_reg_results.csv", row.names = 1)
+```
+
+```{r filter-results, eval = FALSE}
+#filter and slim the dataframe of results
+mu_ag_sig_reg_results = dpt_time_terms %>% filter (q_value < 0.05) %>%
+  select(gene_id, term, q_value, estimate)
+mu_ag_reg_results = dpt_time_terms %>% select(gene_id,term,q_value,estimate)
+```
+
+## Saving both significant and nonsignificant results
+
+```{r save-results, eval = FALSE}
+#save results 
+write.csv(mu_ag_sig_reg_results, "C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_ag_sig_reg_results.csv")
+write.csv(mu_ag_reg_results, "C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_ag_reg_results.csv")
+```
+
+## Converting back to Seurat Object and Saving
+
+```{r convert-back-to-seurat, eval = FALSE}
+#convert cds back to seurat and save
+mu_rna_concat_ag_mono <- as.Seurat(mu_rna_concat_ag_cds, assay = NULL)
+saveRDS(mu_rna_concat_mono, "C:/Users/Ji Lab/Documents/JID manuscript/dpt_only/mu/mu_rna_concat_ag_mono.Rds") 
+```

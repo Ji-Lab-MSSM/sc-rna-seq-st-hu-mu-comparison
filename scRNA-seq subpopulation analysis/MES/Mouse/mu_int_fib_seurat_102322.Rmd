@@ -1,0 +1,240 @@
+---
+title: "Isolating Mouse Mesenchymal cells"
+author: "Larry Chen"
+date: "2023-01-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+## Import Libraries
+
+```{r, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-load, include = FALSE}
+mu_int_fib = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/mu_int/mes/mu_int_fib.Rds")
+```
+
+## Load Object
+
+```{r, eval = FALSE}
+mu_int = readRDS("/oak/stanford/groups/khavari/users/andrewji/seurat_obj/mu_all_int.Rds") 
+```
+
+## Subset mesenchymal cells/fibroblasts
+
+```{r, eval = FALSE}
+Idents(mu_int) = "integrated_snn_res.0.6"
+mu_int_fib = subset(mu_int, idents = c(6,8,16,28))
+```
+
+## Preprocess data/select samples
+
+non-wounded normal skin
+
+```{r, eval = FALSE}
+mu.list <- SplitObject(mu_int_fib, split.by = "orig.ident")
+
+
+# Only non-wounded normal skin
+mu.list <- mu.list[c("uw1", "uw2", "5w", "5wk1","5wk2","5wk3","9w","9wk1","9wk2","9wk3")]
+for (i in 1:length(mu.list)) {
+    mu.list[[i]] <- NormalizeData(mu.list[[i]], verbose = FALSE)
+    mu.list[[i]] <- FindVariableFeatures(mu.list[[i]], selection.method = "vst", 
+        nfeatures = 2000, verbose = FALSE)
+}
+```
+
+## Integrate
+
+```{r, eval = FALSE}
+reference.list <- mu.list
+mu.anchors <- FindIntegrationAnchors(object.list = reference.list, dims = 1:30, k.filter = 105)
+
+mu_int_fib <- IntegrateData(anchorset = mu.anchors, dims = 1:30)
+```
+
+## Scale/PCA/UMAP
+
+```{r, eval = FALSE}
+DefaultAssay(mu_int_fib) <- "integrated"
+mu_int_fib <- ScaleData(mu_int_fib, verbose = FALSE)
+mu_int_fib <- RunPCA(mu_int_fib, npcs = 30, verbose = FALSE)
+mu_int_fib <- RunUMAP(mu_int_fib, reduction = "pca", dims = 1:30)
+```
+
+## Clustering
+
+```{r, eval = FALSE}
+mu_int_fib <- FindNeighbors(mu_int_fib, dims = 1:30, verbose = T)
+mu_int_fib <- FindClusters(mu_int_fib, resolution = 0.1, verbose = FALSE)
+#mu_int_fib <- FindClusters(mu_int_fib, resolution = 0.15, verbose = FALSE)
+mu_int_fib <- FindClusters(mu_int_fib, resolution = 0.2, verbose = FALSE)
+#mu_int_fib <- FindClusters(mu_int_fib, resolution = 0.25, verbose = FALSE)
+#mu_int_fib <- FindClusters(mu_int_fib, resolution = 0.3, verbose = FALSE)
+mu_int_fib <- FindClusters(mu_int_fib, resolution = 0.4, verbose = FALSE)
+mu_int_fib <- FindClusters(mu_int_fib, resolution = 0.6, verbose = FALSE)
+mu_int_fib <- FindClusters(mu_int_fib, resolution = 0.8, verbose = FALSE)
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_fib/")
+saveRDS(mu_int_fib, file="mu_int_fib.Rds") 
+```
+
+## Label by Anagen and Telogen
+
+```{r, eval = FALSE}
+# Label by Anagen and Telogen
+Idents(mu_int_fib) = "orig.ident"
+dput(levels(Idents(mu_int_fib)))
+clus = c("uw1", "uw2", "5w", "5wk1", "5wk2", "5wk3", 
+"9w", "9wk1", "9wk2","9wk3")
+clus_names = c(rep("DH",2),rep("SJ",8))
+clus_names2 = c(rep("NA",2),"Main","Val","Val","Val","Main","Val","Val","Val")
+tel_ana_names = c(rep("NA",2),rep("ANA",4),rep("TEL",4))
+dataset = rep("x",ncol(mu_int_fib))
+tel_ana = rep("x",ncol(mu_int_fib))
+main_val = rep("x",ncol(mu_int_fib))
+for (i in 1:length(clus))
+{
+  cells = WhichCells(mu_int_fib, idents = clus[i])
+  dataset[match(cells,colnames(mu_int_fib))] = clus_names[i]
+  main_val[match(cells,colnames(mu_int_fib))] = clus_names2[i]
+  tel_ana[match(cells,colnames(mu_int_fib))] = tel_ana_names[i]
+}
+mu_int_fib$dataset = dataset
+
+mu_int_fib$hf_cycle = tel_ana
+mu_int_fib$main_val = main_val
+```
+
+## UMAPS
+
+### By sample
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_fib/plots")
+png("mu_int_fib_labelbysample.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_fib, reduction = "umap", group.by = "orig.ident")
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_fib, reduction = "umap", group.by = "orig.ident")
+```
+
+### By dataset
+
+```{r, eval = FALSE}
+png("mu_int_fib_groupby_dataset.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_fib, reduction="umap", label=T, group.by = "dataset", pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_fib, reduction="umap", label=T, group.by = "dataset", pt.size = 0.1)
+```
+
+### By main_val
+
+Sample is from Joost Main or Joost Validation
+
+```{r, eval = FALSE}
+png("mu_int_fib_groupby_mainval.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_fib, reduction="umap", label=T, group.by = "main_val", pt.size = 0.25)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_fib, reduction="umap", label=T, group.by = "main_val", pt.size = 0.25)
+```
+
+### By hf_cycle
+
+```{r, eval = FALSE}
+png("mu_int_fib_groupby_hfcycle.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(mu_int_fib, reduction="umap", label=T, group.by = "hf_cycle", pt.size = 0.25)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(mu_int_fib, reduction="umap", label=T, group.by = "hf_cycle", pt.size = 0.25)
+```
+
+### By cluster
+
+```{r, eval = FALSE}
+all_res = c(0.1,0.2,0.4,0.6,0.8)
+for (i in 1:length(all_res))
+{
+  res = all_res[i]
+  Idents(mu_int_fib) = paste("integrated_snn_res.",res,sep="")
+  png(paste("mu_int_fib_res_",res,".png",sep=""), units = "in", height = 5, width = 5.5, res=300)
+  p=DimPlot(mu_int_fib, reduction="umap", label=T, do.return = T, pt.size = 0.1)
+  print(p)
+  dev.off()
+}
+```
+
+```{r, echo = FALSE}
+Idents(mu_int_fib) = "integrated_snn_res.0.6"
+DimPlot(mu_int_fib, reduction="umap", label=T, do.return = T, pt.size = 0.1)
+```
+
+## Feature Plots
+
+```{r, eval = FALSE}
+DefaultAssay(mu_int_fib) = "RNA"
+genes = c("Krt14", "Krt5", "Krt1", "Krt10", "Lhx2", "Krt19", 
+"Azgp1", "Krt15", "Col1a1","Thy1","Pdgfra","Pdgfrb","Acta2","Mcam","Myh9","Sparc","Lum",
+"Il31ra","Mfap2","Cldn10","Fam13a","Mt1","Mt2","Mmp10","Pthlh","Tnc","Mdk","Lgals1",
+"Cxcl12","Gpx3","Mfap5","Corin","Dcn","Tagln","Des","Acta1","Sfrp2","Cd34",
+"Tnn","Abi3bp","Ramp1","Crabp1","Notum","Pappa2","Nrg2","Cntn1","Grem2","Mylk",
+"Acan","Sox2","Lef1","Ccl2","Cd276","Mki67","Top2a")
+#genes = "MT-CYB"
+genes_match = genes[genes %in% rownames(mu_int_fib)]
+
+for (i in 1:length(genes_match))
+{
+  png(paste("mu_int_fib_",genes_match[i],"_noaxes_nolegend_pt0.25.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = mu_int_fib, features = genes_match[i], cols = c("lightgrey", "blue"), pt.size = 0.25, order=T)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+## Find Markers
+
+```{r, eval = FALSE}
+Idents(mu_int_fib) = "integrated_snn_res.0.6"
+setwd("/scratch/groups/khavari/users/andrewji/mu_all/integrated/mu_int_fib")
+markers <- FindAllMarkers(mu_int_fib, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+markers.filt = subset(markers, p_val_adj < 0.05)
+write.table(markers.filt, file = "mu_int_fib_seurat_markers_res0.6.csv",sep = ",",row.names = T, col.names=T)
+```
