@@ -17,12 +17,12 @@ scRNA-seq subpopoulation analysis/InitialObjects
 ### Human (ns_int)
 1. ns_int_seurat_111420 (Integrating ns_int)
 2. ns_int_keep_010923 (Creating ns_int_keep)
-3. ns_int_barpolot_proportion_120320 (ns_int proportion barplots)
+3. ns_int_barplot_proportion_120320 (ns_int proportion barplots)
 #### Scanorama/Harmony integration comparisons
-1a. ns_int_harmony_100522 (Integrating ns_int using Harmony)
-1b. ns_int_scanorama_111123 (Scanorama integration)
-2. ns_int_scan24_harm_lisi_122322 (Running LISI on ns_int integrated using Seurat, Harmony, and Scanorama)
-3. ns_int_harmony_scanorama_comparison_122322 (LISI comparison b/w Seurat, Harmony, Scanorama)
+1. ns_int_harmony_100522 (Integrating ns_int using Harmony)
+2. ns_int_scanorama_111123 (Scanorama integration)
+3. ns_int_scan24_harm_lisi_122322 (Running LISI on ns_int integrated using Seurat, Harmony, and Scanorama)
+4. ns_int_harmony_scanorama_comparison_122322 (LISI comparison b/w Seurat, Harmony, Scanorama)
 
 
 ## Subpopulation Analyses
