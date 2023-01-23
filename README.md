@@ -3,6 +3,8 @@ Single-Cell and Spatial Transcriptomic Analysis of Human Skin Delineates Interce
 
 This Github contains R markdown files, associated html documents, and Jupyter notebooks.  
 
+SEURAT OBJECTS/DATA CAN BE FOUND HERE:
+https://www.dropbox.com/sh/3capqkc6dvng70p/AAB_PrNNgvauiasHWQDxn1Zja?dl=0
 # Order of Scripts
 
 
