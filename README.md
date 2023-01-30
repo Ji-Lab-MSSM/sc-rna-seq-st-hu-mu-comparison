@@ -9,7 +9,7 @@ https://www.dropbox.com/sh/3capqkc6dvng70p/AAB_PrNNgvauiasHWQDxn1Zja?dl=0
 
 
 ## Initial Generation of Objects 
-scRNA-seq subpopoulation analysis/InitialObjects
+scRNA-seq subpopulation analysis/InitialObjects
 
 ### Mouse (mu_int)
 1. mu_int_seurat_111320 (Creating mu_int/Integrating mouse data)
