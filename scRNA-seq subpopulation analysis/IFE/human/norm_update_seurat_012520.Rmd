@@ -1,0 +1,167 @@
+---
+title: "Generating norm_update"
+author: "Larry Chen"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+NOTE: This code utilizes Seurat v3.0.0. You will need to install seurat version 3.0.0 using 'remotes'. We recommend installing the version in separate location from your regular seurat package.
+
+```{r install-seurat3.0.0, eval = FALSE}
+remotes::install_version('Seurat', version = '3.0.0', lib = "C:/Users/Ji Lab/AppData/Local/R/alt_packages" )
+```
+
+```{r load-packages, message = FALSE}
+Sys.setenv(RETICULATE_PYTHON = "C:/Users/Ji Lab/AppData/Local/Programs/Python/Python310")
+library(reticulate)
+library(Seurat, lib.loc = "C:/Users/Ji Lab/AppData/Local/R/alt_packages")
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+```
+
+```{r session-info}
+sessioninfo::session_info()%>%
+  details::details(
+    summary = 'Current session info',
+    open    = TRUE
+  )
+```
+
+```{r secret-upload, include = FALSE}
+ns_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int.Rds")
+```
+
+## Load ns_int
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/norm")
+ns_int = readRDS("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/ns_int.Rds")
+```
+
+### Subset ns_int to create norm_update
+
+```{r}
+Idents(ns_int) = 'dataset'
+norm_update = subset(ns_int, idents = "AJ")
+```
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/norm/plots")
+Idents(norm_update) = "patient"
+patient_order = c("P1","P2","P3","P4","P5","P6","P7","P8","P9","P10")
+Idents(norm_update) = factor(x = Idents(norm_update), levels = patient_order)
+png("norm_update_labelbypatient.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(norm_update, reduction="umap", do.label=F, do.return = T, pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(norm_update) = "patient"
+patient_order = c("P1","P2","P3","P4","P5","P6","P7","P8","P9","P10")
+Idents(norm_update) = factor(x = Idents(norm_update), levels = patient_order)
+DimPlot(norm_update, reduction="umap", pt.size = 0.1)
+```
+
+## Scale/PCA/UMAP
+
+```{r, eval = FALSE}
+all.genes <- rownames(norm_update)
+norm_update <- ScaleData(norm_update, features = all.genes, vars.to.regress = c("nCount_RNA","percent.mt"))
+norm_update <- RunPCA(norm_update, features = VariableFeatures(object = norm_update))
+norm_update <- RunUMAP(norm_update, dims = 1:15, verbose = TRUE)
+```
+
+## Clustering
+
+```{r, eval = FALSE}
+norm_update <- FindNeighbors(norm_update, dims = 1:15, verbose = FALSE)
+norm_update <- FindClusters(norm_update, resolution = 0.4, verbose = FALSE)
+```
+
+## Graphing
+
+### Feature Plots
+
+```{r, eval = FALSE}
+setwd("/scratch/groups/khavari/users/andrewji/10xdata/merge12ptsnew/norm/plots")
+genes = c("KRT14","KRT5","KRT1","KRT10","LHX2","KRT19","AZGP1","KRT15","SOX9","CD14","CD163","CD207","CD3E","MLANA","VWF","COL1A1","S100A8","S100A9","CD1C","CLEC9A","MGST1","APOE","XCL1")
+for (i in 1:length(genes))
+{
+  png(paste("norm_update_",genes[i],"_noaxes_nolegend_pt0.25_norp.png",sep=""), units = "in", height = 6, width = 5, res=300)
+  p=FeaturePlot(object = norm_update, features = genes[i], cols = c("lightgrey", "blue"), pt.size = 0.25)
+  p = p + NoLegend() + NoAxes()
+  print(p)
+  dev.off()
+}
+```
+
+### UMAPs
+
+#### color by final cell
+
+```{r, eval = FALSE}
+png("norm_update_labelbybfinalcell_norp.png", units = "in", height = 5, width = 7.5, res=300)
+DimPlot(norm_update, reduction="umap", do.label=F, group.by = "finalcell", do.return = T, pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+DimPlot(norm_update, reduction="umap", group.by = "finalcell", pt.size = 0.1)
+```
+
+#### color by res.0.4 clusters
+
+```{r, eval = FALSE}
+png("norm_update_res.0.4_norp.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(norm_update, reduction="umap", do.label=T, do.return = T, pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(norm_update) = 'integrated_snn_res.0.4'
+DimPlot(norm_update, reduction="umap", pt.size = 0.1)
+```
+
+#### color by patient
+
+```{r, eval = FALSE}
+Idents(norm_update) = "patient"
+patient_order = c("P1","P2","P3","P4","P5","P6","P7","P8","P9","P10")
+Idents(norm_update) = factor(x = Idents(norm_update), levels = patient_order)
+png("norm_update_labelbypatient_norp.png", units = "in", height = 5, width = 6, res=300)
+DimPlot(norm_update, reduction="umap", do.label=F, do.return = T, pt.size = 0.1)
+dev.off()
+```
+
+```{r, echo = FALSE}
+Idents(norm_update) = "patient"
+patient_order = c("P1","P2","P3","P4","P5","P6","P7","P8","P9","P10")
+Idents(norm_update) = factor(x = Idents(norm_update), levels = patient_order)
+DimPlot(norm_update, reduction="umap", pt.size = 0.1)
+```
+
+#### color by nCount_RNA
+
+```{r, eval = FALSE}
+png("norm_update_nUMI_norp.png", units = "in", height = 6, width = 5, res=300)
+p=FeaturePlot(object = norm_update, features = "nCount_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+p = p + NoLegend() + NoAxes()
+print(p)
+dev.off()
+```
+
+```{r, echo = FALSE}
+FeaturePlot(object = norm_update, features = "nCount_RNA", cols = c("lightgrey", "blue"), pt.size = 0.25)
+```
+
+## Save Object
+
+```{r, eval = FALSE}
+setwd("C:/Users/Ji Lab/Documents/JID manuscript/andrew_scripts/orig_obj/kc_int")
+saveRDS(norm_update, file="norm_update.Rds") 
+```
