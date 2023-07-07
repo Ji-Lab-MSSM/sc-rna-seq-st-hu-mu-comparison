@@ -1,12 +1,20 @@
-# sc-rna-seq-st-hu-mu-comparison
-Single-Cell and Spatial Transcriptomic Analysis of Human Skin Delineates Intercellular Communication and Pathogenic Cells
+# Single-Cell and Spatial Transcriptomic Analysis of Human Skin Delineates Intercellular Communication and Pathogenic Cells
 
-This Github contains R markdown files, associated html documents, and Jupyter notebooks.  
+This repository contains R markdown files, associated html documents, and Jupyter notebooks.
 
-SEURAT OBJECTS/DATA CAN BE FOUND HERE:
-https://www.dropbox.com/sh/3capqkc6dvng70p/AAB_PrNNgvauiasHWQDxn1Zja?dl=0
+Our paper is now published at the [Journal of Investigative Dermatology](https://www.sciencedirect.com/science/article/pii/S0022202X23020407)! 
+
+# Data Availability
+
+Seurat Objects and data are available for download [here](https://www.dropbox.com/sh/3capqkc6dvng70p/AAB_PrNNgvauiasHWQDxn1Zja?dl=0).
+
+## Interactive Portal
+
+Check out our interactive portal to explore our data is available at this link: https://human-skin-browser.ds.czbiohub.org/
+Username: demo
+Password: YjJKBAbhUF9Ug
+
 # Order of Scripts
-
 
 ## Initial Generation of Objects 
 scRNA-seq subpopulation analysis/InitialObjects
@@ -56,15 +64,15 @@ scRNA-seq subpopulation analysis/PSU
 3. ns_int_psu_filt_seurat_121020 (Filtering human PSU cells)
 4. ns_int_psu_ref_seurat_121720 (Removing doublets from human PSU cells)
 
-
 ## Spatial Transcriptomics Analysis
 1. n23_p1_seurat_120120 (Processing Spatial Transcriptomics Data)
 2. n23_p1_seurat_prediction_merged_confident_CT_020621 (Generating celltype predictions for ST spots using scRNA-seq data)
 3. n23_p1_map_predictions_011823 (Mapping scRNA-seq based cell predictions onto Spatial Transcriptomics data)
 
-
 ## Pseudotime Analyses
+
 pseudotime-multiome analyses/pseudotime
+
 ### Mouse
 1. mu_rna_concat_ag_dpt_12_12_2022 (Calculating pseudotime for mouse cells)
 ### Human
@@ -72,15 +80,16 @@ pseudotime-multiome analyses/pseudotime
 ### Combined
 1. dpt_AG_pseudo_violin_12_12_2022 (Graphing Violin plots For Diffusion Pseudotime Analysis (+ Difference in Median Bar Plot))
 
-
 ## Multiome Analyses
+
 pseudotime-multiome analyses/multiome
 1. s_comb_mo_render
 
-
 ## Disease scRNA-seq
+
 ### Mouse
 1. mu_psor_pipeline (Isolating Cycling Cells in Mice and Calculating Proportions)
+
 ### Human
 1. nsc_int_ife_process_1_4_2023 (Processing nsc_int_ife / isolating IFE cells from normal skin samples)
 2. pso_cheng_ife_process_1_4_2023 (Processing pso_cheng_ife / Isolating IFE cells from psoriatic skin samples)
@@ -89,5 +98,9 @@ pseudotime-multiome analyses/multiome
 5. cheng_prop_anal_1_5_2023 (Human Psoriasis Proportion Analyses)
 
 
+# Citations
 
+If you use our resource, please cite:
+
+Thrane et al. Single-Cell and Spatial Transcriptomic Analysis of Human Skin Delineates Intercellular Communication and Pathogenic Cells. Journal of Investigative Dermatology. 2023. PMID: 37142187. doi: 10.1016/j.jid.2023.02.040. 
 
