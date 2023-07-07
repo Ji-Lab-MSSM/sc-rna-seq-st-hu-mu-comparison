@@ -1,6 +1,6 @@
 # Single-Cell and Spatial Transcriptomic Analysis of Human Skin Delineates Intercellular Communication and Pathogenic Cells
 
-This repository contains R markdown files, associated html documents, and Jupyter notebooks.
+This repository contains R markdown files, associated html documents, and Jupyter notebooks for the analysis in Thrane et al 2023.
 
 Our paper is now published at the [Journal of Investigative Dermatology](https://www.sciencedirect.com/science/article/pii/S0022202X23020407)! 
 
@@ -10,9 +10,12 @@ Seurat Objects and data are available for download [here](https://www.dropbox.co
 
 ## Interactive Portal
 
-Check out our interactive portal to explore our data is available at this link: https://human-skin-browser.ds.czbiohub.org/
-Username: demo
-Password: YjJKBAbhUF9Ug
+Check out our interactive portal to explore our data is available at this link: [https://human-skin-browser.ds.czbiohub.org/](https://human-skin-browser.ds.czbiohub.org/) (login info below)
+
+* Username: demo
+* Password: YjJKBAbhUF9Ug
+
+Also check out our human2mouse interactive browser at this link: [https://rstudio-connect.hpc.mssm.edu/hmsbrowser/](https://rstudio-connect.hpc.mssm.edu/hmsbrowser/) (no login required)
 
 # Order of Scripts
 
